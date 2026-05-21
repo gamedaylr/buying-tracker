@@ -39,8 +39,7 @@ const DailyBuyingTracker = () => {
     }
 
     const savedEmail = localStorage.getItem('userEmail');
-    const savedFileId = localStorage.getItem('googleDriveFileId');
-    
+    const savedLoginState = localStorage.getItem('isLoggedIn');
     if (savedEmail && savedLoginState === 'true') {
       setUserEmail(savedEmail);
       setIsLoggedIn(true);
