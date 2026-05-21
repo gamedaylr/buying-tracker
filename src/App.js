@@ -176,16 +176,8 @@ const DailyBuyingTracker = () => {
   };
 
   useEffect(() => {
-    localStorage.setItem('buyingTrackerData', JSON.stringify(purchases));
-    
-    if (isLoggedIn) {
-      const syncTimer = setTimeout(() => {
-        autoSyncData();
-      }, 1000);
-      
-      return () => clearTimeout(syncTimer);
-    }
-  }, [purchases, isLoggedIn]);
+  localStorage.setItem('buyingTrackerData', JSON.stringify(purchases));
+}, [purchases]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
