@@ -297,8 +297,7 @@ return (
   <p style={{ color: '#D1D3D4', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
     Track purchases for GameDay Sports Cards
   </p>
-          <p style={{ color: '#color: '#D1D3D4'', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
-            Input purchases to print & track
+<p style={{ color: '#D1D3D4', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>            Input purchases to print & track
           </p>
           
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
