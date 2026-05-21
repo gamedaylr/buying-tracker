@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
+import gamedayLogo from './gameday-logo.png';
+
 const GOOGLE_CLIENT_ID = '708254067981-icjtn5h6jc60h6v6khko7ksujv73t36o.apps.googleusercontent.com';
 
 const DailyBuyingTracker = () => {
@@ -286,14 +288,17 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
   const sortedDates = Object.keys(groupedByDate).sort().reverse();
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding: '1rem', fontFamily: "'Segoe UI', 'Roboto', sans-serif" }}>
-      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)'      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-          <h1 style={{ color: '#f1f5f9', fontSize: '2rem', fontWeight: '700', margin: '0 0 0.5rem 0' }}>
-            Buying Slip Tracker
-          </h1>
-          <p style={{ color: '#cbd5e1', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
+ <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+  <img src={gamedayLogo} alt="GameDay Sports Cards" style={{ maxWidth: '180px', marginBottom: '1.5rem' }} />
+  <h1 style={{ color: '#FFFFFF', fontSize: '2rem', fontWeight: '700', margin: '0 0 0.5rem 0' }}>
+    Buying Slip Tracker
+  </h1>
+  <p style={{ color: '#D1D3D4', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
+    Track purchases for GameDay Sports Cards
+  </p>
+          <p style={{ color: '#color: '#D1D3D4'', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
             Input purchases to print & track
           </p>
           
@@ -319,7 +324,7 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
               </button>
             ) : (
               <>
-                <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '0.5rem 1rem', borderRadius: '6px', color: '#cbd5e1', fontSize: '0.85rem' }}>
+                <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '0.5rem 1rem', borderRadius: '6px', color: '#color: '#D1D3D4'', fontSize: '0.85rem' }}>
                   {userEmail}
                 </div>
                 <button
@@ -357,23 +362,23 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
         </div>
 
         {/* Form Section */}
-        <div style={{ background: 'rgba(30, 41, 59, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)', marginBottom: '2rem' }}>
+        <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)', marginBottom: '2rem' }}>
           <h2 style={{ color: '#e2e8f0', fontSize: '1.2rem', fontWeight: '600', marginTop: 0, marginBottom: '1.5rem' }}>New Buying Slip</h2>
           
           <form onSubmit={handleAddAndPrint} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Date *</label>
+                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Date *</label>
                 <input
                   type="date"
                   name="date"
                   value={formData.date}
                   onChange={handleInputChange}
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Lot Comp</label>
+                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Lot Comp</label>
                 <input
                   type="number"
                   name="lotComp"
@@ -381,44 +386,44 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
                   onChange={handleInputChange}
                   placeholder="0"
                   step="0.01"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Payment Methods</label>
+              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Payment Methods</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                 <div>
-                  <label style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>Cash</label>
-                  <input type="number" name="cash" value={formData.cash} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#f1f5f9', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Cash</label>
+                  <input type="number" name="cash" value={formData.cash} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>Venmo</label>
-                  <input type="number" name="venmo" value={formData.venmo} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#f1f5f9', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Venmo</label>
+                  <input type="number" name="venmo" value={formData.venmo} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>Cash App</label>
-                  <input type="number" name="cashApp" value={formData.cashApp} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#f1f5f9', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Cash App</label>
+                  <input type="number" name="cashApp" value={formData.cashApp} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>Zelle</label>
-                  <input type="number" name="zelle" value={formData.zelle} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#f1f5f9', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Zelle</label>
+                  <input type="number" name="zelle" value={formData.zelle} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>PayPal</label>
-                  <input type="number" name="paypal" value={formData.paypal} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#f1f5f9', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>PayPal</label>
+                  <input type="number" name="paypal" value={formData.paypal} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#color: '#FFFFFF''', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>Trade</label>
-                  <input type="number" name="trade" value={formData.trade} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#f1f5f9', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Trade</label>
+                  <input type="number" name="trade" value={formData.trade} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba((20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>% Bought at</label>
+                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>% Bought at</label>
                 <input
                   type="number"
                   name="percentageBought"
@@ -426,11 +431,11 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
                   onChange={handleInputChange}
                   placeholder="0"
                   step="0.01"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5color: '#FFFFFF'f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}># of Cards</label>
+                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}># of Cards</label>
                 <input
                   type="number"
                   name="numCards"
@@ -438,37 +443,37 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
                   onChange={handleInputChange}
                   placeholder="0"
                   step="1"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Buyer Name *</label>
+              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Buyer Name *</label>
               <input
                 type="text"
                 name="buyerName"
                 value={formData.buyerName}
                 onChange={handleInputChange}
                 placeholder="Buyer name"
-                style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Bought From</label>
+              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Bought From</label>
               <input
                 type="text"
                 name="boughtFrom"
                 value={formData.boughtFrom}
                 onChange={handleInputChange}
                 placeholder="Seller name"
-                style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#color: '#FFFFFF''', fontSize: '0.9rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Cost *</label>
+              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Cost *</label>
               <input
                 type="number"
                 name="cost"
@@ -476,15 +481,14 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
                 onChange={handleInputChange}
                 placeholder="0"
                 step="0.01"
-                style={{ width: '100%', padding: '0.6rem', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <button
               type="submit"
               style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                color: '#fff',
+background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                color: '#fff',
                 border: 'none',
                 padding: '0.8rem 1.5rem',
                 borderRadius: '6px',
@@ -503,7 +507,7 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
 
         {/* Summary Section */}
         {showSummary && (
-          <div style={{ background: 'rgba(30, 41, 59, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)', marginBottom: '2rem' }}>
+          <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)', marginBottom: '2rem' }}>
             <h2 style={{ color: '#e2e8f0', fontSize: '1.1rem', fontWeight: '600', marginTop: 0, marginBottom: '1rem' }}>Daily Summary</h2>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
@@ -517,7 +521,7 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
                 { label: 'PayPal', value: '$' + totals.paypal.toFixed(2) },
                 { label: 'Trade', value: '$' + totals.trade.toFixed(2) },
               ].map(item => (
-                <div key={item.label} style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>
+                <div key={item.label} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>
                   <p style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>
                     {item.label}
                   </p>
@@ -532,24 +536,24 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
 
         {/* Purchases History */}
         {purchases.length > 0 && (
-          <div style={{ background: 'rgba(30, 41, 59, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)' }}>
+          <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)' }}>
             <h2 style={{ color: '#e2e8f0', fontSize: '1.1rem', fontWeight: '600', marginTop: 0, marginBottom: '1rem' }}>
               History
             </h2>
 
             {sortedDates.map(date => (
               <div key={date} style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ color: '#cbd5e1', fontSize: '0.95rem', fontWeight: '600', margin: '0 0 0.8rem 0', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(71, 85, 105, 0.3)' }}>
+                <h3 style={{ color: '#color: '#D1D3D4'', fontSize: '0.95rem', fontWeight: '600', margin: '0 0 0.8rem 0', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(71, 85, 105, 0.3)' }}>
                   {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                 </h3>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                   {groupedByDate[date].map((purchase) => (
-                    <div key={purchase.id} style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+                    <div key={purchase.id} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
                         <div>
-                          <p style={{ color: '#f1f5f9', fontWeight: '600', margin: 0 }}>Slip #{purchase.purchaseNumber}</p>
-                          <p style={{ color: '#cbd5e1', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p>
+                          <p style={{ color: '#color: '#FFFFFF'', fontWeight: '600', margin: 0 }}>Slip #{purchase.purchaseNumber}</p>
+                          <p style={{ color: '#color: '#D1D3D4'', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p>
                         </div>
                         <button
                           onClick={() => handleDeletePurchase(purchase.id)}
@@ -567,10 +571,10 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
                         </button>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', color: '#94a3b8' }}>
-                        <p style={{ margin: 0 }}>Cost: <span style={{ color: '#f1f5f9' }}>${purchase.cost.toFixed(2)}</span></p>
-                        <p style={{ margin: 0 }}>Cards: <span style={{ color: '#f1f5f9' }}>{purchase.numCards}</span></p>
-                        <p style={{ margin: 0 }}>Lot Comp: <span style={{ color: '#f1f5f9' }}>${purchase.lotComp.toFixed(2)}</span></p>
-                        <p style={{ margin: 0 }}>%: <span style={{ color: '#f1f5f9' }}>{purchase.percentageBought.toFixed(2)}</span></p>
+                        <p style={{ margin: 0 }}>Cost: <span style={{ color: '#color: '#FFFFFF'' }}>${purchase.cost.toFixed(2)}</span></p>
+                        <p style={{ margin: 0 }}>Cards: <span style={{ color: '#color: '#FFFFFF'' }}>{purchase.numCards}</span></p>
+                        <p style={{ margin: 0 }}>Lot Comp: <span style={{ color: '#color: '#FFFFFF'' }}>${purchase.lotComp.toFixed(2)}</span></p>
+                        <p style={{ margin: 0 }}>%: <span style={{ color: '#color: '#FFFFFF'' }}>{purchase.percentageBought.toFixed(2)}</span></p>
                       </div>
                     </div>
                   ))}
