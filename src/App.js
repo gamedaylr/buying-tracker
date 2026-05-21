@@ -169,18 +169,14 @@ const DailyBuyingTracker = () => {
         <style>
           * { margin: 0; padding: 0; }
           body { font-family: Arial, sans-serif; padding: 0.25in; }
-          .slip { width: 4in; height: 6in; border: 1px solid #000; padding: 0.25in; box-sizing: border-box; }
-          h2 { font-size: 16px; margin-bottom: 0.1in; }
-          .field { margin-bottom: 0.15in; font-size: 11px; }
-          .label { font-weight: bold; display: inline-block; width: 1.2in; }
-          .value { display: inline-block; }
-          .checkbox-group { margin: 0.1in 0; }
-          .checkbox-row { display: flex; gap: 0.2in; font-size: 10px; margin-bottom: 0.05in; }
-          .checkbox { display: flex; gap: 0.05in; align-items: center; }
-          input[type="checkbox"] { width: 12px; height: 12px; cursor: pointer; }
-          .cost-section { border-top: 2px solid #000; margin-top: 0.2in; padding-top: 0.1in; }
-          .cost-label { font-weight: bold; font-size: 14px; }
-          .cost-value { font-weight: bold; font-size: 18px; }
+          .slip { width: 4in; height: 6in; border: 1px solid #000; padding: 0.15in; box-sizing: border-box; font-size: 13px; }
+h2 { font-size: 18px; margin-bottom: 0.08in; }
+.field { margin-bottom: 0.12in; font-size: 12px; }
+.label { font-weight: bold; display: inline-block; width: 1.1in; }
+.checkbox-group { margin: 0.08in 0; }
+.checkbox-row { display: flex; gap: 0.15in; font-size: 11px; margin-bottom: 0.04in; }
+.cost-label { font-weight: bold; font-size: 16px; }
+.cost-value { font-weight: bold; font-size: 20px; }
         </style>
       </head>
       <body>
