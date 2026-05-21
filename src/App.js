@@ -287,9 +287,8 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
 
   const sortedDates = Object.keys(groupedByDate).sort().reverse();
 
-  return (
-background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)'      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-        {/* Header */}
+return (
+  <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)', padding: '1rem', fontFamily: "'Segoe UI', 'Roboto', sans-serif" }}>        {/* Header */}
  <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
   <img src={gamedayLogo} alt="GameDay Sports Cards" style={{ maxWidth: '180px', marginBottom: '1.5rem' }} />
   <h1 style={{ color: '#FFFFFF', fontSize: '2rem', fontWeight: '700', margin: '0 0 0.5rem 0' }}>
