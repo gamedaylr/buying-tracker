@@ -322,8 +322,7 @@ return (
               </button>
             ) : (
               <>
-                <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '0.5rem 1rem', borderRadius: '6px', color: '#D1D3D4'', fontSize: '0.85rem' }}>
-                  {userEmail}
+<div style={{ background: 'rgba(35, 31, 32, 0.8)', padding: '0.5rem 1rem', borderRadius: '6px', color: '#D1D3D4', fontSize: '0.85rem' }}>            
                 </div>
                 <button
                   onClick={handleGoogleLogout}
