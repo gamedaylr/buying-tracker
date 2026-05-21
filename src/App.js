@@ -66,16 +66,15 @@ const DailyBuyingTracker = () => {
   document.head.appendChild(script);
 };
 
-  const handleGoogleLogin = () => {
+const handleGoogleLogin = () => {
   if (!window.gapi) {
-    alert('Google API not loaded yet. Please try again.');
+    alert('Google API not loaded yet. Please try again in a moment.');
     return;
   }
   
   window.gapi.load('auth2', () => {
     window.gapi.auth2.init({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: SCOPES.join(' ')
+      client_id: GOOGLE_CLIENT_ID
     }).then(auth2 => {
       auth2.signIn().then(googleUser => {
         const profile = googleUser.getBasicProfile();
@@ -83,8 +82,6 @@ const DailyBuyingTracker = () => {
         setIsLoggedIn(true);
         localStorage.setItem('userEmail', profile.getEmail());
         localStorage.setItem('isLoggedIn', 'true');
-      }).catch(err => {
-        alert('Sign in failed: ' + err.error);
       });
     });
   });
