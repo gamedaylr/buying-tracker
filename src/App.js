@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
 const GOOGLE_CLIENT_ID = '708254067981-icjtn5h6jc60h6v6khko7ksujv73t36o.apps.googleusercontent.com';
-const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 const DailyBuyingTracker = () => {
   const [purchases, setPurchases] = useState([]);
