@@ -6,9 +6,7 @@ const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 const DailyBuyingTracker = () => {
   const [purchases, setPurchases] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
-  const [syncStatus, setSyncStatus] = useState('idle');
-  const [fileId, setFileId] = useState(null);
+  const [userEmail, setUserEmail] = useState('')
   const [nextPurchaseNumber, setNextPurchaseNumber] = useState(1);
   const [showSummary, setShowSummary] = useState(false);
   const printRef = useRef();
@@ -47,7 +45,6 @@ const DailyBuyingTracker = () => {
     
     if (savedEmail && savedLoginState === 'true') {
       setUserEmail(savedEmail);
-      setFileId(savedFileId);
       setIsLoggedIn(true);
     }
 
@@ -83,7 +80,6 @@ const DailyBuyingTracker = () => {
     window.gapi.auth2.getAuthInstance().signOut().then(() => {
       setIsLoggedIn(false);
       setUserEmail('');
-      setFileId(null);
       localStorage.removeItem('userEmail');
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('googleDriveFileId');
