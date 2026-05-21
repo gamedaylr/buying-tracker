@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const GOOGLE_CLIENT_ID = '708254067981-icjtn5h6jc60h6v6khko7ksujv73t36o.apps.googleusercontent.com';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
@@ -9,8 +9,7 @@ const DailyBuyingTracker = () => {
   const [userEmail, setUserEmail] = useState('')
   const [nextPurchaseNumber, setNextPurchaseNumber] = useState(1);
   const [showSummary, setShowSummary] = useState(false);
-  const printRef = useRef();
-  
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     lotComp: '',
@@ -40,7 +39,6 @@ const DailyBuyingTracker = () => {
     }
 
     const savedEmail = localStorage.getItem('userEmail');
-    const savedFileId = localStorage.getItem('googleDriveFileId');
     const savedLoginState = localStorage.getItem('isLoggedIn');
     
     if (savedEmail && savedLoginState === 'true') {
