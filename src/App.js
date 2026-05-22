@@ -1,10 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import gamedayLogo from './gameday-logo.png';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue, push, remove, update } from 'firebase/database';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAjHoxB4h09Ame44C5MowR_IrbqNdANH8E",
+  authDomain: "gameday-buying-tracker.firebaseapp.com",
+  projectId: "gameday-buying-tracker",
+  storageBucket: "gameday-buying-tracker.firebasestorage.app",
+  messagingSenderId: "363561073964",
+  appId: "1:363561073964:web:f96c0e8b485f76796e0089",
+  databaseURL: "https://gameday-buying-tracker-default-rtdb.firebaseio.com"
+};
+
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
 const DailyBuyingTracker = () => {
   const [purchases, setPurchases] = useState([]);
   const [nextPurchaseNumber, setNextPurchaseNumber] = useState(1);
   const [showSummary, setShowSummary] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -19,20 +35,29 @@ const DailyBuyingTracker = () => {
     zelle: '',
     paypal: '',
     trade: '',
+    cashFromSafe: '',
     cost: ''
   });
-useEffect(() => {
-  const saved = localStorage.getItem('buyingTrackerData');
-  if (saved) {
-    try {
-      const data = JSON.parse(saved);
-      setPurchases(data);
-      setNextPurchaseNumber(data.length + 1);
-    } catch (e) {
-      console.error('Failed to load data');
-    }
-  }
-}, []);
+
+  // Load data from Firebase
+  useEffect(() => {
+    const purchasesRef = ref(database, 'purchases');
+    onValue(purchasesRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const purchasesArray = Object.entries(data).map(([key, value]) => ({
+          ...value,
+          firebaseKey: key
+        }));
+        setPurchases(purchasesArray);
+        setNextPurchaseNumber(purchasesArray.length + 1);
+      } else {
+        setPurchases([]);
+        setNextPurchaseNumber(1);
+      }
+      setLoading(false);
+    });
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -42,7 +67,7 @@ useEffect(() => {
     }));
   };
 
-  const handleAddAndPrint = (e) => {
+  const handleAddAndPrint = async (e) => {
     e.preventDefault();
     
     if (!formData.date || !formData.buyerName || !formData.cost) {
@@ -51,7 +76,6 @@ useEffect(() => {
     }
 
     const newPurchase = {
-      id: Date.now(),
       purchaseNumber: nextPurchaseNumber,
       date: formData.date,
       lotComp: parseFloat(formData.lotComp) || 0,
@@ -65,31 +89,38 @@ useEffect(() => {
       zelle: parseFloat(formData.zelle) || 0,
       paypal: parseFloat(formData.paypal) || 0,
       trade: parseFloat(formData.trade) || 0,
-      cost: parseFloat(formData.cost) || 0
+      cashFromSafe: parseFloat(formData.cashFromSafe) || 0,
+      cost: parseFloat(formData.cost) || 0,
+      timestamp: new Date().toISOString()
     };
 
-    setPurchases([...purchases, newPurchase]);
-    setNextPurchaseNumber(nextPurchaseNumber + 1);
+    // Save to Firebase
+    try {
+      await push(ref(database, 'purchases'), newPurchase);
+      
+      setTimeout(() => {
+        printBuyingSlip(newPurchase);
+      }, 100);
 
-    setTimeout(() => {
-      printBuyingSlip(newPurchase);
-    }, 100);
-
-    setFormData(prev => ({
-      ...prev,
-      lotComp: '',
-      percentageBought: '',
-      numCards: '',
-      buyerName: '',
-      boughtFrom: '',
-      cash: '',
-      venmo: '',
-      cashApp: '',
-      zelle: '',
-      paypal: '',
-      trade: '',
-      cost: ''
-    }));
+      setFormData(prev => ({
+        ...prev,
+        lotComp: '',
+        percentageBought: '',
+        numCards: '',
+        buyerName: '',
+        boughtFrom: '',
+        cash: '',
+        venmo: '',
+        cashApp: '',
+        zelle: '',
+        paypal: '',
+        trade: '',
+        cashFromSafe: '',
+        cost: ''
+      }));
+    } catch (error) {
+      alert('Error saving purchase: ' + error.message);
+    }
   };
 
   const printBuyingSlip = (purchase) => {
@@ -163,6 +194,12 @@ useEffect(() => {
                 <span>TRADE $${purchase.trade.toFixed(2)}</span>
               </div>
             </div>
+            <div class="checkbox-row">
+              <div class="checkbox">
+                <input type="checkbox" ${purchase.cashFromSafe > 0 ? 'checked' : ''} disabled>
+                <span>SAFE $${purchase.cashFromSafe.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
           
           <div class="field">
@@ -197,8 +234,35 @@ useEffect(() => {
     printWindow.print();
   };
 
-  const handleDeletePurchase = (id) => {
-    setPurchases(purchases.filter(p => p.id !== id));
+  const handleDeletePurchase = async (firebaseKey) => {
+    if (window.confirm('Delete this purchase?')) {
+      try {
+        await remove(ref(database, `purchases/${firebaseKey}`));
+      } catch (error) {
+        alert('Error deleting purchase: ' + error.message);
+      }
+    }
+  };
+
+  const exportToCSV = () => {
+    if (purchases.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    let csv = 'Purchase #,Date,Buyer Name,Bought From,Lot Comp,% Bought At,# of Cards,Cash,Venmo,Cash App,Zelle,PayPal,Trade,Cash from Safe,Cost\n';
+    
+    purchases.forEach(purchase => {
+      csv += `${purchase.purchaseNumber},"${purchase.date}","${purchase.buyerName}","${purchase.boughtFrom}",${purchase.lotComp},${purchase.percentageBought},${purchase.numCards},${purchase.cash},${purchase.venmo},${purchase.cashApp},${purchase.zelle},${purchase.paypal},${purchase.trade},${purchase.cashFromSafe},${purchase.cost}\n`;
+    });
+
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv));
+    element.setAttribute('download', `GameDay-Purchases-${new Date().toISOString().split('T')[0]}.csv`);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
   };
 
   const totals = {
@@ -209,6 +273,7 @@ useEffect(() => {
     zelle: purchases.reduce((sum, p) => sum + p.zelle, 0),
     paypal: purchases.reduce((sum, p) => sum + p.paypal, 0),
     trade: purchases.reduce((sum, p) => sum + p.trade, 0),
+    cashFromSafe: purchases.reduce((sum, p) => sum + p.cashFromSafe, 0),
   };
 
   const groupedByDate = purchases.reduce((acc, purchase) => {
@@ -219,6 +284,14 @@ useEffect(() => {
   }, {});
 
   const sortedDates = Object.keys(groupedByDate).sort().reverse();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#FFFFFF', fontSize: '1.2rem' }}>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)', padding: '1rem', fontFamily: "'Segoe UI', 'Roboto', sans-serif" }}>
@@ -247,6 +320,20 @@ useEffect(() => {
               }}
             >
               {showSummary ? 'Hide' : 'Show'} Daily Summary
+            </button>
+            <button
+              onClick={exportToCSV}
+              style={{
+                background: 'rgba(237, 28, 36, 0.1)',
+                color: '#ED1C24',
+                border: '1px solid rgba(237, 28, 36, 0.3)',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                fontSize: '0.85rem',
+                cursor: 'pointer'
+              }}
+            >
+              📥 Download CSV
             </button>
           </div>
         </div>
@@ -307,6 +394,10 @@ useEffect(() => {
                 <div>
                   <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Trade</label>
                   <input type="number" name="trade" value={formData.trade} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Cash from Safe</label>
+                  <input type="number" name="cashFromSafe" value={formData.cashFromSafe} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
               </div>
             </div>
@@ -411,6 +502,7 @@ useEffect(() => {
                 { label: 'Zelle', value: '$' + totals.zelle.toFixed(2) },
                 { label: 'PayPal', value: '$' + totals.paypal.toFixed(2) },
                 { label: 'Trade', value: '$' + totals.trade.toFixed(2) },
+                { label: 'Cash from Safe', value: '$' + totals.cashFromSafe.toFixed(2) },
               ].map(item => (
                 <div key={item.label} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>
                   <p style={{ color: '#D1D3D4', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>
@@ -440,14 +532,14 @@ useEffect(() => {
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                   {groupedByDate[date].map((purchase) => (
-                    <div key={purchase.id} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+                    <div key={purchase.firebaseKey} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
                         <div>
                           <p style={{ color: '#FFFFFF', fontWeight: '600', margin: 0 }}>Slip #{purchase.purchaseNumber}</p>
                           <p style={{ color: '#D1D3D4', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p>
                         </div>
                         <button
-                          onClick={() => handleDeletePurchase(purchase.id)}
+                          onClick={() => handleDeletePurchase(purchase.firebaseKey)}
                           style={{
                             background: 'rgba(237, 28, 36, 0.2)',
                             color: '#ED1C24',
