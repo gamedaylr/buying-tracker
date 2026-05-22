@@ -265,15 +265,28 @@ const DailyBuyingTracker = () => {
   };
 
   const totals = {
-    cost: purchases.reduce((sum, p) => sum + p.cost, 0),
-    cash: purchases.reduce((sum, p) => sum + p.cash, 0),
-    venmo: purchases.reduce((sum, p) => sum + p.venmo, 0),
-    cashApp: purchases.reduce((sum, p) => sum + p.cashApp, 0),
-    zelle: purchases.reduce((sum, p) => sum + p.zelle, 0),
-    paypal: purchases.reduce((sum, p) => sum + p.paypal, 0),
-    trade: purchases.reduce((sum, p) => sum + p.trade, 0),
-    cashFromSafe: purchases.reduce((sum, p) => sum + p.cashFromSafe, 0),
-  };
+    const today = new Date();
+const weekStart = new Date(today.setDate(today.getDate() - today.getDay()));
+const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+const totals = {
+  cost: purchases.reduce((sum, p) => sum + p.cost, 0),
+  cash: purchases.reduce((sum, p) => sum + p.cash, 0),
+  venmo: purchases.reduce((sum, p) => sum + p.venmo, 0),
+  cashApp: purchases.reduce((sum, p) => sum + p.cashApp, 0),
+  zelle: purchases.reduce((sum, p) => sum + p.zelle, 0),
+  paypal: purchases.reduce((sum, p) => sum + p.paypal, 0),
+  trade: purchases.reduce((sum, p) => sum + p.trade, 0),
+  cashFromSafe: purchases.reduce((sum, p) => sum + p.cashFromSafe, 0),
+};
+
+const weeklyTotals = {
+  cost: purchases.filter(p => new Date(p.date) >= weekStart).reduce((sum, p) => sum + p.cost, 0),
+};
+
+const monthlyTotals = {
+  cost: purchases.filter(p => new Date(p.date) >= monthStart).reduce((sum, p) => sum + p.cost, 0),
+};
 
   const groupedByDate = purchases.reduce((acc, purchase) => {
     const date = purchase.date;
@@ -342,34 +355,34 @@ const DailyBuyingTracker = () => {
           <h2 style={{ color: '#FFFFFF', fontSize: '1.2rem', fontWeight: '600', marginTop: 0, marginBottom: '1.5rem' }}>New Buying Slip</h2>
           
           <form onSubmit={handleAddAndPrint} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Date *</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleInputChange}
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Lot Comp</label>
-                <input
-                  type="number"
-                  name="lotComp"
-                  value={formData.lotComp}
-                  onChange={handleInputChange}
-                  placeholder="0"
-                  step="0.01"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 600 ? '1fr' : '1fr 1fr', gap: '1rem' }}>
+  <div>
+    <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Date *</label>
+    <input
+      type="date"
+      name="date"
+      value={formData.date}
+      onChange={handleInputChange}
+      style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
+    />
+  </div>
+  <div>
+    <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Lot Comp</label>
+    <input
+      type="number"
+      name="lotComp"
+      value={formData.lotComp}
+      onChange={handleInputChange}
+      placeholder="0"
+      step="0.01"
+      style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
+    />
+  </div>
+</div>
 
             <div>
               <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Payment Methods</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+           <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 600 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '0.8rem' }}></div>   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                 <div>
                   <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Cash</label>
                   <input type="number" name="cash" value={formData.cash} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
@@ -514,6 +527,16 @@ const DailyBuyingTracker = () => {
               ))}
             </div>
           </div>
+          <h3 style={{ color: '#FFFFFF', fontSize: '1rem', fontWeight: '600', margin: '1.5rem 0 1rem 0', paddingTop: '1.5rem', borderTop: '1px solid rgba(209, 211, 212, 0.3)' }}>Weekly Total</h3>
+<div style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>
+  <p style={{ color: '#D1D3D4', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>This Week Cost</p>
+  <p style={{ color: '#FFFFFF', fontSize: '1.2rem', fontWeight: '600', margin: 0 }}>{'$' + weeklyTotals.cost.toFixed(2)}</p>
+</div>
+
+<h3 style={{ color: '#FFFFFF', fontSize: '1rem', fontWeight: '600', margin: '1.5rem 0 1rem 0', paddingTop: '1.5rem', borderTop: '1px solid rgba(209, 211, 212, 0.3)' }}>Monthly Total</h3>
+<div style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>  <p style={{ color: '#D1D3D4', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>This Month Cost</p>
+  <p style={{ color: '#FFFFFF', fontSize: '1.2rem', fontWeight: '600', margin: 0 }}>{'$' + monthlyTotals.cost.toFixed(2)}</p>
+</div>
         )}
 
         {/* Purchases History */}
