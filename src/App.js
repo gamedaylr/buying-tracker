@@ -21,23 +21,18 @@ const DailyBuyingTracker = () => {
     trade: '',
     cost: ''
   });
-
-  useEffect(() => {
-    const saved = localStorage.getItem('buyingTrackerData');
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setPurchases(data);
-        setNextPurchaseNumber(data.length + 1);
-      } catch (e) {
-        console.error('Failed to load data');
-      }
-    },
-     []);
-
-  useEffect(() => {
-    localStorage.setItem('buyingTrackerData', JSON.stringify(purchases));
-  }, [purchases]);
+useEffect(() => {
+  const saved = localStorage.getItem('buyingTrackerData');
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      setPurchases(data);
+      setNextPurchaseNumber(data.length + 1);
+    } catch (e) {
+      console.error('Failed to load data');
+    }
+  }
+}, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
