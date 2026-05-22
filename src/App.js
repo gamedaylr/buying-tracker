@@ -525,8 +525,9 @@ const monthlyTotals = {
                 </div>
               ))}
             </div>
-          </div>
-          </>
+</div>
+        
+
           <h3 style={{ color: '#FFFFFF', fontSize: '1rem', fontWeight: '600', margin: '1.5rem 0 1rem 0', paddingTop: '1.5rem', borderTop: '1px solid rgba(209, 211, 212, 0.3)' }}>Weekly Total</h3>
 <div style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>
   <p style={{ color: '#D1D3D4', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>This Week Cost</p>
