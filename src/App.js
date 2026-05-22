@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import gamedayLogo from './gameday-logo.png';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, push, remove, update } from 'firebase/database';
-
+import { getDatabase, ref, onValue, push, remove } from 'firebase/database';
 const firebaseConfig = {
   apiKey: "AIzaSyAjHoxB4h09Ame44C5MowR_IrbqNdANH8E",
   authDomain: "gameday-buying-tracker.firebaseapp.com",
