@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
-
 import gamedayLogo from './gameday-logo.png';
-
-const GOOGLE_CLIENT_ID = '708254067981-icjtn5h6jc60h6v6khko7ksujv73t36o.apps.googleusercontent.com';
 
 const DailyBuyingTracker = () => {
   const [purchases, setPurchases] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState('')
+  const [userEmail, setUserEmail] = useState('');
   const [nextPurchaseNumber, setNextPurchaseNumber] = useState(1);
   const [showSummary, setShowSummary] = useState(false);
   
@@ -41,62 +38,12 @@ const DailyBuyingTracker = () => {
 
     const savedEmail = localStorage.getItem('userEmail');
     const savedLoginState = localStorage.getItem('isLoggedIn');
-
+    
     if (savedEmail && savedLoginState === 'true') {
       setUserEmail(savedEmail);
       setIsLoggedIn(true);
     }
-
-    loadGoogleAPI();
   }, []);
-
- const loadGoogleAPI = () => {
-  if (window.gapi) return; // Already loaded
-  
-  const script = document.createElement('script');
-  script.src = 'https://apis.google.com/js/platform.js';
-  script.async = true;
-  script.defer = true;
-  script.onload = () => {
-    if (window.gapi && window.gapi.load) {
-      window.gapi.load('auth2', () => {
-        // Auth2 is ready
-      });
-    }
-  };
-  document.head.appendChild(script);
-};
-
-const handleGoogleLogin = () => {
-  if (!window.gapi) {
-    alert('Google API not loaded yet. Please try again in a moment.');
-    return;
-  }
-  
-  window.gapi.load('auth2', () => {
-    window.gapi.auth2.init({
-      client_id: GOOGLE_CLIENT_ID
-    }).then(auth2 => {
-      auth2.signIn().then(googleUser => {
-        const profile = googleUser.getBasicProfile();
-        setUserEmail(profile.getEmail());
-        setIsLoggedIn(true);
-        localStorage.setItem('userEmail', profile.getEmail());
-        localStorage.setItem('isLoggedIn', 'true');
-      });
-    });
-  });
-};
-
-  const handleGoogleLogout = () => {
-    window.gapi.auth2.getAuthInstance().signOut().then(() => {
-      setIsLoggedIn(false);
-      setUserEmail('');
-      localStorage.removeItem('userEmail');
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('googleDriveFileId');
-    });
-  };
 
   useEffect(() => {
     localStorage.setItem('buyingTrackerData', JSON.stringify(purchases));
@@ -173,13 +120,17 @@ const handleGoogleLogin = () => {
           * { margin: 0; padding: 0; }
           body { font-family: Arial, sans-serif; padding: 0.25in; }
           .slip { width: 4in; height: 6in; border: 1px solid #000; padding: 0.15in; box-sizing: border-box; font-size: 13px; }
-h2 { font-size: 18px; margin-bottom: 0.08in; }
-.field { margin-bottom: 0.12in; font-size: 12px; }
-.label { font-weight: bold; display: inline-block; width: 1.1in; }
-.checkbox-group { margin: 0.08in 0; }
-.checkbox-row { display: flex; gap: 0.15in; font-size: 11px; margin-bottom: 0.04in; }
-.cost-label { font-weight: bold; font-size: 16px; }
-.cost-value { font-weight: bold; font-size: 20px; }
+          h2 { font-size: 18px; margin-bottom: 0.08in; }
+          .field { margin-bottom: 0.12in; font-size: 12px; }
+          .label { font-weight: bold; display: inline-block; width: 1.1in; }
+          .value { display: inline-block; }
+          .checkbox-group { margin: 0.08in 0; }
+          .checkbox-row { display: flex; gap: 0.15in; font-size: 11px; margin-bottom: 0.04in; }
+          .checkbox { display: flex; gap: 0.05in; align-items: center; }
+          input[type="checkbox"] { width: 12px; height: 12px; cursor: pointer; }
+          .cost-section { border-top: 2px solid #000; margin-top: 0.2in; padding-top: 0.1in; }
+          .cost-label { font-weight: bold; font-size: 16px; }
+          .cost-value { font-weight: bold; font-size: 20px; }
         </style>
       </head>
       <body>
@@ -273,9 +224,6 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
     zelle: purchases.reduce((sum, p) => sum + p.zelle, 0),
     paypal: purchases.reduce((sum, p) => sum + p.paypal, 0),
     trade: purchases.reduce((sum, p) => sum + p.trade, 0),
-    lotComp: purchases.reduce((sum, p) => sum + p.lotComp, 0),
-    percentageBought: purchases.reduce((sum, p) => sum + p.percentageBought, 0),
-    numCards: purchases.reduce((sum, p) => sum + p.numCards, 0)
   };
 
   const groupedByDate = purchases.reduce((acc, purchase) => {
@@ -287,66 +235,26 @@ h2 { font-size: 18px; margin-bottom: 0.08in; }
 
   const sortedDates = Object.keys(groupedByDate).sort().reverse();
 
-return (
-  <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)', padding: '1rem', fontFamily: "'Segoe UI', 'Roboto', sans-serif" }}>        {/* Header */}
- <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-  <img src={gamedayLogo} alt="GameDay Sports Cards" style={{ maxWidth: '180px', marginBottom: '1.5rem' }} />
-  <h1 style={{ color: '#FFFFFF', fontSize: '2rem', fontWeight: '700', margin: '0 0 0.5rem 0' }}>
-    Buying Slip Tracker
-  </h1>
-  <p style={{ color: '#D1D3D4', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
-    Track purchases for GameDay Sports Cards
-  </p>
-<p style={{ color: '#D1D3D4', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>            Input purchases to print & track
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #231F20 0%, #2a2628 100%)', padding: '1rem', fontFamily: "'Segoe UI', 'Roboto', sans-serif" }}>
+      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+          <img src={gamedayLogo} alt="GameDay Sports Cards" style={{ maxWidth: '180px', marginBottom: '1.5rem' }} />
+          <h1 style={{ color: '#FFFFFF', fontSize: '2rem', fontWeight: '700', margin: '0 0 0.5rem 0' }}>
+            Buying Slip Tracker
+          </h1>
+          <p style={{ color: '#D1D3D4', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>
+            Track purchases for GameDay Sports Cards
           </p>
           
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            {!isLoggedIn ? (
-              <button
-                onClick={handleGoogleLogin}
-                style={{
-                  background: 'linear-gradient(135deg, #4285f4 0%, #1967d2 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '0.6rem 1.2rem',
-                  borderRadius: '6px',
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
-                onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
-              >
-                ☁️ Sign in
-              </button>
-            ) : (
-              <>
-<div style={{ background: 'rgba(35, 31, 32, 0.8)', padding: '0.5rem 1rem', borderRadius: '6px', color: '#D1D3D4', fontSize: '0.85rem' }}>            
-                </div>
-                <button
-                  onClick={handleGoogleLogout}
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#ef4444',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '6px',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Sign out
-                </button>
-              </>
-            )}
-            
             <button
               onClick={() => setShowSummary(!showSummary)}
               style={{
-                background: showSummary ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.1)',
-                color: '#3b82f6',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
+                background: showSummary ? 'rgba(237, 28, 36, 0.3)' : 'rgba(237, 28, 36, 0.1)',
+                color: '#ED1C24',
+                border: '1px solid rgba(237, 28, 36, 0.3)',
                 padding: '0.5rem 1rem',
                 borderRadius: '6px',
                 fontSize: '0.85rem',
@@ -359,23 +267,23 @@ return (
         </div>
 
         {/* Form Section */}
-        <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)', marginBottom: '2rem' }}>
-          <h2 style={{ color: '#e2e8f0', fontSize: '1.2rem', fontWeight: '600', marginTop: 0, marginBottom: '1.5rem' }}>New Buying Slip</h2>
+        <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(209, 211, 212, 0.3)', marginBottom: '2rem' }}>
+          <h2 style={{ color: '#FFFFFF', fontSize: '1.2rem', fontWeight: '600', marginTop: 0, marginBottom: '1.5rem' }}>New Buying Slip</h2>
           
           <form onSubmit={handleAddAndPrint} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Date *</label>
+                <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Date *</label>
                 <input
                   type="date"
                   name="date"
                   value={formData.date}
                   onChange={handleInputChange}
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Lot Comp</label>
+                <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Lot Comp</label>
                 <input
                   type="number"
                   name="lotComp"
@@ -383,44 +291,44 @@ return (
                   onChange={handleInputChange}
                   placeholder="0"
                   step="0.01"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Payment Methods</label>
+              <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Payment Methods</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                 <div>
-                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Cash</label>
-                  <input type="number" name="cash" value={formData.cash} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Cash</label>
+                  <input type="number" name="cash" value={formData.cash} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Venmo</label>
-                  <input type="number" name="venmo" value={formData.venmo} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Venmo</label>
+                  <input type="number" name="venmo" value={formData.venmo} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Cash App</label>
-                  <input type="number" name="cashApp" value={formData.cashApp} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Cash App</label>
+                  <input type="number" name="cashApp" value={formData.cashApp} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Zelle</label>
-                  <input type="number" name="zelle" value={formData.zelle} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Zelle</label>
+                  <input type="number" name="zelle" value={formData.zelle} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>PayPal</label>
-                  <input type="number" name="paypal" value={formData.paypal} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#color: '#FFFFFF''', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>PayPal</label>
+                  <input type="number" name="paypal" value={formData.paypal} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ color: '#color: '#D1D3D4'', fontSize: '0.75rem' }}>Trade</label>
-                  <input type="number" name="trade" value={formData.trade} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba((20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '4px', color: '#color: '#FFFFFF'', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ color: '#D1D3D4', fontSize: '0.75rem' }}>Trade</label>
+                  <input type="number" name="trade" value={formData.trade} onChange={handleInputChange} placeholder="0" step="0.01" style={{ width: '100%', padding: '0.5rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '4px', color: '#FFFFFF', fontSize: '0.85rem', boxSizing: 'border-box' }} />
                 </div>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>% Bought at</label>
+                <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>% Bought at</label>
                 <input
                   type="number"
                   name="percentageBought"
@@ -428,11 +336,11 @@ return (
                   onChange={handleInputChange}
                   placeholder="0"
                   step="0.01"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#f1f5color: '#FFFFFF'f9', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}># of Cards</label>
+                <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}># of Cards</label>
                 <input
                   type="number"
                   name="numCards"
@@ -440,37 +348,37 @@ return (
                   onChange={handleInputChange}
                   placeholder="0"
                   step="1"
-                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Buyer Name *</label>
+              <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Buyer Name *</label>
               <input
                 type="text"
                 name="buyerName"
                 value={formData.buyerName}
                 onChange={handleInputChange}
                 placeholder="Buyer name"
-                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Bought From</label>
+              <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Bought From</label>
               <input
                 type="text"
                 name="boughtFrom"
                 value={formData.boughtFrom}
                 onChange={handleInputChange}
                 placeholder="Seller name"
-                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#color: '#FFFFFF''', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#color: '#D1D3D4'', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Cost *</label>
+              <label style={{ display: 'block', color: '#D1D3D4', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.3rem' }}>Cost *</label>
               <input
                 type="number"
                 name="cost"
@@ -478,21 +386,22 @@ return (
                 onChange={handleInputChange}
                 placeholder="0"
                 step="0.01"
-                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(71, 85, 105, 0.5)', borderRadius: '6px', color: '#color: '#FFFFFF'', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.6rem', background: 'rgba(20, 18, 19, 0.5)', border: '1px solid rgba(209, 211, 212, 0.3)', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.9rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <button
               type="submit"
               style={{
-background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                color: '#fff',
+                background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)',
+                color: '#fff',
                 border: 'none',
                 padding: '0.8rem 1.5rem',
                 borderRadius: '6px',
                 fontSize: '1rem',
                 fontWeight: '600',
                 cursor: 'pointer',
-                transition: 'all 0.3s ease',
+                transition: 'all 0.3s ease'
               }}
               onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
               onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
@@ -504,8 +413,8 @@ background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                c
 
         {/* Summary Section */}
         {showSummary && (
-          <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)', marginBottom: '2rem' }}>
-            <h2 style={{ color: '#e2e8f0', fontSize: '1.1rem', fontWeight: '600', marginTop: 0, marginBottom: '1rem' }}>Daily Summary</h2>
+          <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(209, 211, 212, 0.3)', marginBottom: '2rem' }}>
+            <h2 style={{ color: '#FFFFFF', fontSize: '1.1rem', fontWeight: '600', marginTop: 0, marginBottom: '1rem' }}>Daily Summary</h2>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
               {[
@@ -519,10 +428,10 @@ background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                c
                 { label: 'Trade', value: '$' + totals.trade.toFixed(2) },
               ].map(item => (
                 <div key={item.label} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '0.8rem', borderRadius: '6px' }}>
-                  <p style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>
+                  <p style={{ color: '#D1D3D4', fontSize: '0.75rem', fontWeight: '500', margin: '0 0 0.3rem 0' }}>
                     {item.label}
                   </p>
-                  <p style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: '600', margin: 0 }}>
+                  <p style={{ color: '#FFFFFF', fontSize: '1rem', fontWeight: '600', margin: 0 }}>
                     {item.value}
                   </p>
                 </div>
@@ -533,14 +442,14 @@ background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                c
 
         {/* Purchases History */}
         {purchases.length > 0 && (
-          <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(71, 85, 105, 0.3)' }}>
-            <h2 style={{ color: '#e2e8f0', fontSize: '1.1rem', fontWeight: '600', marginTop: 0, marginBottom: '1rem' }}>
+          <div style={{ background: 'rgba(35, 31, 32, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(209, 211, 212, 0.3)' }}>
+            <h2 style={{ color: '#FFFFFF', fontSize: '1.1rem', fontWeight: '600', marginTop: 0, marginBottom: '1rem' }}>
               History
             </h2>
 
             {sortedDates.map(date => (
               <div key={date} style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ color: '#color: '#D1D3D4'', fontSize: '0.95rem', fontWeight: '600', margin: '0 0 0.8rem 0', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(71, 85, 105, 0.3)' }}>
+                <h3 style={{ color: '#D1D3D4', fontSize: '0.95rem', fontWeight: '600', margin: '0 0 0.8rem 0', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(209, 211, 212, 0.3)' }}>
                   {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                 </h3>
                 
@@ -549,14 +458,14 @@ background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                c
                     <div key={purchase.id} style={{ background: 'rgba(20, 18, 19, 0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
                         <div>
-                          <p style={{ color: '#color: '#FFFFFF'', fontWeight: '600', margin: 0 }}>Slip #{purchase.purchaseNumber}</p>
-                          <p style={{ color: '#color: '#D1D3D4'', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p>
+                          <p style={{ color: '#FFFFFF', fontWeight: '600', margin: 0 }}>Slip #{purchase.purchaseNumber}</p>
+                          <p style={{ color: '#D1D3D4', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p>
                         </div>
                         <button
                           onClick={() => handleDeletePurchase(purchase.id)}
                           style={{
-                            background: 'rgba(239, 68, 68, 0.2)',
-                            color: '#ef4444',
+                            background: 'rgba(237, 28, 36, 0.2)',
+                            color: '#ED1C24',
                             border: 'none',
                             padding: '0.3rem 0.6rem',
                             borderRadius: '4px',
@@ -567,11 +476,11 @@ background: 'linear-gradient(135deg, #ED1C24 0%, #b01219 100%)'                c
                           Delete
                         </button>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', color: '#94a3b8' }}>
-                        <p style={{ margin: 0 }}>Cost: <span style={{ color: '#color: '#FFFFFF'' }}>${purchase.cost.toFixed(2)}</span></p>
-                        <p style={{ margin: 0 }}>Cards: <span style={{ color: '#color: '#FFFFFF'' }}>{purchase.numCards}</span></p>
-                        <p style={{ margin: 0 }}>Lot Comp: <span style={{ color: '#color: '#FFFFFF'' }}>${purchase.lotComp.toFixed(2)}</span></p>
-                        <p style={{ margin: 0 }}>%: <span style={{ color: '#color: '#FFFFFF'' }}>{purchase.percentageBought.toFixed(2)}</span></p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', color: '#D1D3D4' }}>
+                        <p style={{ margin: 0 }}>Cost: <span style={{ color: '#FFFFFF' }}>${purchase.cost.toFixed(2)}</span></p>
+                        <p style={{ margin: 0 }}>Cards: <span style={{ color: '#FFFFFF' }}>{purchase.numCards}</span></p>
+                        <p style={{ margin: 0 }}>Lot Comp: <span style={{ color: '#FFFFFF' }}>${purchase.lotComp.toFixed(2)}</span></p>
+                        <p style={{ margin: 0 }}>%: <span style={{ color: '#FFFFFF' }}>{purchase.percentageBought.toFixed(2)}</span></p>
                       </div>
                     </div>
                   ))}
