@@ -3,8 +3,6 @@ import gamedayLogo from './gameday-logo.png';
 
 const DailyBuyingTracker = () => {
   const [purchases, setPurchases] = useState([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
   const [nextPurchaseNumber, setNextPurchaseNumber] = useState(1);
   const [showSummary, setShowSummary] = useState(false);
   
@@ -34,16 +32,8 @@ const DailyBuyingTracker = () => {
       } catch (e) {
         console.error('Failed to load data');
       }
-    }
-
-    const savedEmail = localStorage.getItem('userEmail');
-    const savedLoginState = localStorage.getItem('isLoggedIn');
-    
-    if (savedEmail && savedLoginState === 'true') {
-      setUserEmail(savedEmail);
-      setIsLoggedIn(true);
-    }
-  }, []);
+    },
+     []);
 
   useEffect(() => {
     localStorage.setItem('buyingTrackerData', JSON.stringify(purchases));
