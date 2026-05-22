@@ -264,8 +264,7 @@ const DailyBuyingTracker = () => {
     document.body.removeChild(element);
   };
 
-  const totals = {
-    const today = new Date();
+const today = new Date();
 const weekStart = new Date(today.setDate(today.getDate() - today.getDay()));
 const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
