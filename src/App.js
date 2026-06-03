@@ -250,11 +250,14 @@ const DailyBuyingTracker = () => {
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                   {groupedByDate[date].map((purchase) => (
-                    <div key={purchase.firebaseKey} style={{ background: 'rgba(20,18,19,0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                        <div><p style={{ color: '#FFF', fontWeight: '600', margin: 0 }}>#{purchase.purchaseNumber}</p><p style={{ color: '#D1D3D4', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p></div>
-                        <button onClick={() => handleDeletePurchase(purchase.firebaseKey)} style={{ background: 'rgba(237,28,36,0.2)', color: '#ED1C24', border: 'none', padding: '0.3rem 0.6rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
-                      </div>
+  <div key={purchase.firebaseKey} style={{ background: 'rgba(20,18,19,0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+      <div><p style={{ color: '#FFF', fontWeight: '600', margin: 0 }}>#{purchase.purchaseNumber}</p><p style={{ color: '#D1D3D4', margin: '0.2rem 0 0 0' }}>{purchase.buyerName}</p></div>
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <button onClick={() => printBuyingSlip(purchase)} style={{ background: 'rgba(237,28,36,0.2)', color: '#ED1C24', border: 'none', padding: '0.3rem 0.6rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>🖨️ Print</button>
+        <button onClick={() => handleDeletePurchase(purchase.firebaseKey)} style={{ background: 'rgba(237,28,36,0.2)', color: '#ED1C24', border: 'none', padding: '0.3rem 0.6rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
+      </div>
+    </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', color: '#D1D3D4' }}>
                         <p style={{ margin: 0 }}>Cost: <span style={{ color: '#FFF' }}>${purchase.cost.toFixed(2)}</span></p>
                         <p style={{ margin: 0 }}>Cards: <span style={{ color: '#FFF' }}>{purchase.numCards}</span></p>
