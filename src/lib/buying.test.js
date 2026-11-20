@@ -27,7 +27,7 @@ import {
   tenderGap,
   validateBuy,
 } from './buying';
-import { printableDocument, slipHtml } from './printHtml';
+import { planSlipItems, printableDocument, slipHtml } from './printHtml';
 
 const user = { uid: 'staff-1', name: 'Alex', email: 'alex@gameday.test' };
 
@@ -354,24 +354,58 @@ test('tender breakdown is per payment type for the selected dates', () => {
   expect(purchasesForTender(rows, { from: '', to: '' }, 'cash').map((row) => row.purchaseNumber)).toEqual([2, 1]);
 });
 
-test('a printed slip can open the print dialog and still fits a phone', () => {
-  const html = slipHtml({
+test('the thermal slip is one 4x6 label and keeps a long list on that label', () => {
+  const short = {
     purchaseNumber: 926,
     date: '2026-11-20',
-    boughtFrom: 'Sam',
-    buyerName: 'Alex',
-    payoutType: 'cash',
+    timestamp: '2026-11-20T20:41:00.000Z',
+    boughtFrom: 'Sam Seller',
+    sellerPhone: '5015550100',
+    loggedByName: 'Jim',
+    buyerName: 'Jim',
     lotComp: 10,
-    cost: 5,
-    cash: 5,
     percentageBought: 50,
-    numCards: 1,
-  }, { shopName: 'GameDay Sports Cards' });
+    cost: 7,
+    cash: 5,
+    storeCredit: 2,
+    lineItems: [
+      { id: 'a', description: '2023 Topps Chrome', quantity: 1, grader: 'PSA', certNumber: '12345678', amount: 4 },
+      { id: 'b', description: 'Prizm lot', quantity: 2 },
+    ],
+  };
+  const html = slipHtml(short, { shopName: 'GameDay Sports Cards', signatureUrl: 'blob:sig' });
+  expect(html).toContain('size: 4in 6in');
+  expect(html).toContain('overflow: hidden');
+  expect(html).toContain('#926');
+  expect(html).toContain('Sam Seller');
+  expect(html).toContain('(501) 555-0100');
+  expect(html).toContain('Logged by');
+  expect(html).toContain('Jim');
+  expect(html).toContain('2023 Topps Chrome');
+  expect(html).toContain('PSA');
+  expect(html).toContain('#12345678');
+  expect(html).toContain('$4.00');
+  expect(html).toContain('2×');
+  expect(html).toContain('COST');
+  expect(html).toContain('$7.00');
+  expect(html).toContain('Store credit');
+  expect(html).toContain('50% of $10.00 comp');
+  expect(html).toContain('blob:sig');
+  expect(html).not.toContain('#444');
+  const many = Array.from({ length: 20 }, (_, index) => ({
+    id: `c${index}`,
+    description: `Card ${String(index + 1).padStart(2, '0')}`,
+    quantity: 1,
+  }));
+  const longHtml = slipHtml({ ...short, lineItems: many, cash: 7, storeCredit: 0 }, { shopName: 'GameDay' });
+  const planned = planSlipItems({ ...short, lineItems: many, cash: 7, storeCredit: 0 });
+  expect(planned.rows.length).toBeLessThan(20);
+  expect(planned.moreCards).toBeGreaterThan(0);
+  expect(longHtml).toContain('Card 01');
+  expect(longHtml).not.toContain('Card 20');
+  expect(longHtml).toContain(`${planned.moreCards} more cards, see receipt`);
   const printed = printableDocument(html, { autoPrint: true });
-  expect(printed).toContain('Print');
   expect(printed).toContain('window.print()');
-  expect(printed).toContain('max-width: 4in');
-  expect(printableDocument(html).includes('window.print()')).toBe(true);
   expect(printableDocument(html).includes('addEventListener("load"')).toBe(false);
 });
 

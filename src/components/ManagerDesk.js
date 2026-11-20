@@ -33,7 +33,7 @@ import { receiptHtml, sellerReportHtml, slipHtml } from '../lib/printHtml';
 import { createShopUser, setUserDisabled } from '../services/accounts';
 import { decryptIdentity } from '../services/api';
 import { downloadUrl } from '../services/photos';
-import { absoluteAsset, downloadText, printHtml } from '../services/print';
+import { absoluteAsset, closePrintWindow, downloadText, preparePrintWindow, printHtml } from '../services/print';
 import { rowsFromSnapshot, saveManagerEdit, setPurchaseDeleted } from '../services/purchases';
 
 const TABS = [
@@ -176,8 +176,13 @@ export default function ManagerDesk() {
   }, [filters]);
   const open = purchases.rows.find((purchase) => purchase.firebaseKey === openId);
 
-  function printSlip(purchase) {
-    printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+  async function printSlip(purchase) {
+    const preparedWindow = preparePrintWindow();
+    let signatureUrl = '';
+    const path = purchase.photos && purchase.photos.signature && purchase.photos.signature.storagePath;
+    if (path) signatureUrl = await downloadUrl(path).catch(() => '');
+    const opened = printHtml(slipHtml(purchase, { shopName: settings.shopName, signatureUrl }), { preparedWindow });
+    if (!opened) closePrintWindow(preparedWindow);
   }
   async function printReceipt(purchase) {
     let signatureUrl = '';

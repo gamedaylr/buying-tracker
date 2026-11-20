@@ -258,7 +258,7 @@ export default function BuyScreen({ onManage }) {
       setResult(saved);
       setIdentity(null);
       const printed = printHtml(
-        slipHtml(saved.purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }),
+        slipHtml(saved.purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }),
         { preparedWindow: printWindow, autoPrint: true },
       );
       if (!printed) {
@@ -274,15 +274,19 @@ export default function BuyScreen({ onManage }) {
     }
   }
 
+  function signatureUrl() {
+    if (!signatureBlob) return '';
+    return URL.createObjectURL(signatureBlob);
+  }
+
   function printSlip(purchase) {
-    const opened = printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+    const opened = printHtml(slipHtml(purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }));
     if (!opened) setPrintNote('The browser blocked the print window. Allow pop-ups for this site, then tap Print slip again.');
   }
 
   function printReceipt(purchase) {
-    let signatureUrl = '';
-    if (signatureBlob) signatureUrl = URL.createObjectURL(signatureBlob);
-    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl, shopName: settings.shopName }));
+    const signatureUrlValue = signatureUrl();
+    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl: signatureUrlValue, shopName: settings.shopName }));
   }
 
   async function approve() {
