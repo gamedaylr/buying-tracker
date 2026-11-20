@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import logo from '../gameday-logo.png';
 import { useAuth } from '../auth/AuthProvider';
 import { parseAamva } from '../lib/aamva';
 import {
   PAYMENT_METHODS,
-  INVENTORY_STATUSES,
   approvalDecision,
+  applyCompInput,
+  applyCostInput,
+  applyPercentInput,
+  cardsOnBuy,
   computeOffers,
   emptyForm,
   findSellers,
@@ -15,11 +18,12 @@ import {
   mailtoHref,
   money,
   num,
-  paymentsTotal,
-  priceFromPercent,
+  paymentLines,
   priorCashForSeller,
+  receiptContactError,
   receiptText,
   smsHref,
+  tenderGap,
   validateBuy,
 } from '../lib/buying';
 import { GRADERS, interpretScan, officialLookup } from '../lib/graders';
@@ -27,11 +31,73 @@ import { plainError } from '../lib/errors';
 import { lookupCert } from '../services/api';
 import { approveWithManagerLogin } from '../services/accounts';
 import { savePurchase } from '../services/purchases';
-import { absoluteAsset, copyText, printHtml } from '../services/print';
+import { absoluteAsset, closePrintWindow, copyText, preparePrintWindow, printHtml, watchLabelPrint } from '../services/print';
 import { receiptHtml, slipHtml } from '../lib/printHtml';
 import PhotoPicker from './PhotoPicker';
 import Scanner from './Scanner';
 import SignaturePad from './SignaturePad';
+
+function SellerSign({
+  shopName, amount, tenders, cards, photos, signed, onSign, onDone, onBack,
+  receiptChoice, onReceiptChoice, receiptPhone, onReceiptPhone, receiptEmail, onReceiptEmail, contactError,
+}) {
+  const cardLabel = cards === 1 ? '1 card' : `${cards} cards`;
+  return (
+    <main className="seller-screen" data-testid="seller-sign">
+      <h1 className="seller-shop">{shopName}</h1>
+      <p className="seller-k">We're paying you</p>
+      <p className="seller-pay">{money(amount)}</p>
+      {tenders.length > 0 ? (
+        <ul className="seller-tenders">
+          {tenders.map((line) => (
+            <li key={line.key}><span>{line.label}</span><span>{money(line.amount)}</span></li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="seller-cards">{cardLabel}</p>
+      {photos.length > 0 ? (
+        <div className="thumbs seller-thumbs">
+          {photos.map((src) => <img key={src} src={src} alt="" />)}
+        </div>
+      ) : null}
+      <p className="seller-agree">I agree to sell these cards to {shopName} for the amount above.</p>
+      <fieldset className="seller-receipt">
+        <legend>Want a receipt?</legend>
+        {[
+          ['none', 'No receipt'],
+          ['text', 'Text it to me'],
+          ['email', 'Email it to me'],
+        ].map(([value, label]) => (
+          <label className="check" key={value}>
+            <input
+              type="radio"
+              name="receipt"
+              checked={receiptChoice === value}
+              onChange={() => onReceiptChoice(value)}
+            />
+            {label}
+          </label>
+        ))}
+        {receiptChoice === 'text' ? (
+          <label>Phone for the text
+            <input inputMode="tel" autoComplete="tel" value={receiptPhone} onChange={(event) => onReceiptPhone(event.target.value)} />
+          </label>
+        ) : null}
+        {receiptChoice === 'email' ? (
+          <label>Email for the receipt
+            <input type="email" autoComplete="email" value={receiptEmail} onChange={(event) => onReceiptEmail(event.target.value)} />
+          </label>
+        ) : null}
+        {contactError ? <p className="banner warn">{contactError}</p> : null}
+      </fieldset>
+      <SignaturePad tall onChange={onSign} />
+      <div className="seller-actions">
+        <button type="button" className="btn btn-primary btn-save" disabled={!signed} onClick={onDone}>Done</button>
+        <button type="button" className="btn btn-ghost" onClick={onBack}>Back</button>
+      </div>
+    </main>
+  );
+}
 
 function newLine() {
   const id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `line-${Date.now()}`;
@@ -57,6 +123,8 @@ export default function BuyScreen({ onManage }) {
   const [cardFiles, setCardFiles] = useState([]);
   const [paymentFiles, setPaymentFiles] = useState([]);
   const [signatureBlob, setSignatureBlob] = useState(null);
+  const [step, setStep] = useState('staff');
+  const signedKey = useRef('');
   const [lineItems, setLineItems] = useState([]);
   const [identity, setIdentity] = useState(null);
   const [showId, setShowId] = useState(false);
@@ -64,10 +132,20 @@ export default function BuyScreen({ onManage }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [printNote, setPrintNote] = useState('');
+  const [tendersFollow, setTendersFollow] = useState(true);
+  const savingRef = useRef(false);
+  const labelWatch = useRef(() => {});
+  const pendingReceipt = useRef(null);
+  const [labelStatus, setLabelStatus] = useState('');
   const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
   const [approving, setApproving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [receiptChoice, setReceiptChoice] = useState('none');
+  const [receiptPhone, setReceiptPhone] = useState('');
+  const [receiptEmail, setReceiptEmail] = useState('');
+  const [contactError, setContactError] = useState('');
 
   const offers = computeOffers(form.lotComp, settings);
   const payoutType = inferPayoutType(form);
@@ -89,6 +167,37 @@ export default function BuyScreen({ onManage }) {
     () => (seller ? [] : findSellers(sellers, form.boughtFrom || form.sellerPhone)),
     [seller, sellers, form.boughtFrom, form.sellerPhone],
   );
+  function dealSnapshot(nextForm) {
+    return JSON.stringify({
+      form: nextForm,
+      sellerId: seller && (seller.id || seller.firebaseKey || seller.name),
+      identity: identity ? { idNumber: identity.idNumber, dob: identity.dob, address: identity.address } : null,
+      lines: lineItems.map((item) => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        grader: item.grader,
+        certNumber: item.certNumber,
+        photoUrl: item.photoUrl,
+        verificationStatus: item.verificationStatus,
+      })),
+      cards: cardFiles.map((file) => file.id),
+      ids: idFiles.map((file) => file.id),
+      payments: paymentFiles.map((file) => file.id),
+    });
+  }
+  const dealKey = useMemo(
+    () => dealSnapshot(form),
+    // dealSnapshot closes over the same values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form, seller, identity, lineItems, cardFiles, idFiles, paymentFiles],
+  );
+
+  useEffect(() => {
+    if (!signedKey.current || signedKey.current === dealKey) return;
+    signedKey.current = '';
+    setSignatureBlob(null);
+  }, [dealKey]);
 
   function setField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -97,6 +206,7 @@ export default function BuyScreen({ onManage }) {
   function chooseOffer(type) {
     const amount = type === 'store_credit' ? offers.creditOffer : offers.cashOffer;
     const percent = type === 'store_credit' ? offers.creditPercent : offers.cashPercent;
+    setTendersFollow(true);
     setForm((prev) => ({
       ...prev,
       payoutType: type,
@@ -113,15 +223,21 @@ export default function BuyScreen({ onManage }) {
     }));
   }
 
+  function onComp(value) {
+    setForm((prev) => applyCompInput(prev, value));
+  }
+
+  function onCost(value) {
+    setForm((prev) => applyCostInput(prev, value, { tendersFollowCost: tendersFollow }));
+  }
+
   function onPercent(value) {
-    const cost = form.lotComp !== '' ? String(priceFromPercent(form.lotComp, value)) : form.cost;
-    setForm((prev) => ({
-      ...prev,
-      percentageBought: value,
-      cost,
-      cash: prev.payoutType === 'store_credit' ? prev.cash : cost,
-      storeCredit: prev.payoutType === 'store_credit' ? cost : prev.storeCredit,
-    }));
+    setForm((prev) => applyPercentInput(prev, value, { tendersFollowCost: tendersFollow }));
+  }
+
+  function onTender(key, value) {
+    setTendersFollow(false);
+    setField(key, value);
   }
 
   function selectSeller(next) {
@@ -208,6 +324,11 @@ export default function BuyScreen({ onManage }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (!signatureBlob) {
+      goToSign();
+      return;
+    }
+    if (savingRef.current || result) return;
     const problem = validateBuy({
       form,
       settings,
@@ -219,8 +340,15 @@ export default function BuyScreen({ onManage }) {
       setError(problem);
       return;
     }
+    if (!tenderGap(form).matches) {
+      setError('Payment boxes have to add up to the cost paid.');
+      return;
+    }
+    const printWindow = preparePrintWindow();
+    savingRef.current = true;
     setSaving(true);
     setError('');
+    setPrintNote('');
     try {
       const saved = await savePurchase({
         form,
@@ -234,25 +362,51 @@ export default function BuyScreen({ onManage }) {
         signatureBlob,
         lineItems,
         identity,
+        receiptRequested: receiptChoice,
       });
       setResult(saved);
       setIdentity(null);
-      printSlip(saved.purchase);
+      pendingReceipt.current = saved.purchase.receiptRequested === 'text' || saved.purchase.receiptRequested === 'email'
+        ? saved.purchase
+        : null;
+      startLabelPrint(saved.purchase, { preparedWindow: printWindow, autoPrint: true });
     } catch (err) {
+      closePrintWindow(printWindow);
       setError(plainError(err));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
+  function signatureUrl() {
+    if (!signatureBlob) return '';
+    return URL.createObjectURL(signatureBlob);
+  }
+
+  function startLabelPrint(purchase, { preparedWindow, autoPrint }) {
+    labelWatch.current();
+    const win = printHtml(
+      slipHtml(purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }),
+      { preparedWindow, autoPrint, trackLabel: true },
+    );
+    if (!win) {
+      closePrintWindow(preparedWindow);
+      setLabelStatus('blocked');
+      return;
+    }
+    setLabelStatus('dialog');
+    labelWatch.current = watchLabelPrint(win, setLabelStatus);
+  }
+
   function printSlip(purchase) {
-    printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+    const preparedWindow = preparePrintWindow();
+    startLabelPrint(purchase, { preparedWindow, autoPrint: false });
   }
 
   function printReceipt(purchase) {
-    let signatureUrl = '';
-    if (signatureBlob) signatureUrl = URL.createObjectURL(signatureBlob);
-    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl, shopName: settings.shopName }));
+    const signatureUrlValue = signatureUrl();
+    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl: signatureUrlValue, shopName: settings.shopName }));
   }
 
   async function approve() {
@@ -288,9 +442,121 @@ export default function BuyScreen({ onManage }) {
     setIdentity(null);
     setResult(null);
     setError('');
+    setPrintNote('');
+    setTendersFollow(true);
+    setStep('staff');
+    setReceiptChoice('none');
+    setReceiptPhone('');
+    setReceiptEmail('');
+    setContactError('');
+    signedKey.current = '';
+    savingRef.current = false;
   }
 
-  const paymentGap = Math.abs(paymentsTotal(form) - num(form.cost));
+  function goToSign() {
+    const problem = validateBuy({
+      form,
+      settings,
+      sellerHasIdPhoto: Boolean(seller && seller.hasIdPhoto),
+      newIdPhotoCount: idFiles.length,
+      lineItems,
+    });
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    if (!tenderGap(form).matches) {
+      setError('Payment boxes have to add up to the cost paid.');
+      return;
+    }
+    setError('');
+    setContactError('');
+    setReceiptPhone(form.sellerPhone || '');
+    setReceiptEmail(form.sellerEmail || '');
+    setSignatureBlob(null);
+    signedKey.current = '';
+    setStep('sign');
+  }
+
+  function backFromSign() {
+    setSignatureBlob(null);
+    signedKey.current = '';
+    setStep('staff');
+  }
+
+  function finishSign() {
+    if (!signatureBlob) return;
+    const problem = receiptContactError(receiptChoice, receiptPhone, receiptEmail);
+    if (problem) {
+      setContactError(problem);
+      return;
+    }
+    setContactError('');
+    const nextForm = receiptChoice === 'text'
+      ? { ...form, sellerPhone: receiptPhone.trim() }
+      : receiptChoice === 'email'
+        ? { ...form, sellerEmail: receiptEmail.trim() }
+        : form;
+    signedKey.current = dealSnapshot(nextForm);
+    if (nextForm !== form) setForm(nextForm);
+    setStep('staff');
+  }
+
+  useEffect(() => {
+    if (!result) return undefined;
+    const node = document.querySelector('[data-testid="saved-buy"]');
+    if (node && node.scrollIntoView) node.scrollIntoView({ block: 'start' });
+    return undefined;
+  }, [result]);
+
+  useEffect(() => {
+    if (labelStatus !== 'check' || !pendingReceipt.current) return undefined;
+    const purchase = pendingReceipt.current;
+    pendingReceipt.current = null;
+    const href = purchase.receiptRequested === 'email'
+      ? mailtoHref(purchase, settings)
+      : purchase.receiptRequested === 'text'
+        ? smsHref(purchase, settings)
+        : '';
+    if (!href) return undefined;
+    const link = document.createElement('a');
+    link.href = href;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return undefined;
+  }, [labelStatus, settings]);
+
+  const gap = tenderGap(form);
+  const locked = Boolean(result);
+  const tenderName = form.payoutType === 'store_credit' ? 'Store credit' : 'Cash';
+  const cardPhotos = [
+    ...cardFiles.map((file) => file.url),
+    ...lineItems.map((item) => item.photoUrl).filter(Boolean),
+  ];
+
+  if (step === 'sign') {
+    return (
+      <SellerSign
+        shopName={settings.shopName}
+        amount={num(form.cost)}
+        tenders={paymentLines(form)}
+        cards={cardsOnBuy(form, lineItems, cardFiles.length)}
+        photos={cardPhotos}
+        signed={Boolean(signatureBlob)}
+        onSign={setSignatureBlob}
+        onDone={finishSign}
+        onBack={backFromSign}
+        receiptChoice={receiptChoice}
+        onReceiptChoice={(value) => { setContactError(''); setReceiptChoice(value); }}
+        receiptPhone={receiptPhone}
+        onReceiptPhone={(value) => { setContactError(''); setReceiptPhone(value); }}
+        receiptEmail={receiptEmail}
+        onReceiptEmail={(value) => { setContactError(''); setReceiptEmail(value); }}
+        contactError={contactError}
+      />
+    );
+  }
 
   return (
     <div className="app" data-testid="buy-screen">
@@ -315,11 +581,21 @@ export default function BuyScreen({ onManage }) {
               <p className="banner warn">A manager still needs to approve this buy. It is saved as pending.</p>
             ) : null}
             {result.identityWarning ? <p className="banner warn">{result.identityWarning}</p> : null}
+            {printNote ? <p className="banner warn">{printNote}</p> : null}
+            {labelStatus === 'dialog' ? <p className="banner ok">Printing the card label. It goes with the cards.</p> : null}
+            {labelStatus === 'blocked' ? <p className="banner warn">The label did not print. Pop-up windows are blocked. Tap Reprint label. It goes with the cards.</p> : null}
+            {labelStatus === 'cancelled' ? <p className="banner warn">The label was not printed. Tap Reprint label before you put the cards away.</p> : null}
+            {labelStatus === 'check' ? <p className="banner warn">If you cancelled the label, or nothing came out, tap Reprint label. It goes with the cards.</p> : null}
             <div className="row-actions">
-              <button type="button" className="btn btn-primary" onClick={() => printSlip(result.purchase)}>Print slip</button>
+              <button type="button" className="btn btn-primary" onClick={() => printSlip(result.purchase)}>Reprint label</button>
               <button type="button" className="btn btn-ghost" onClick={() => printReceipt(result.purchase)}>Print / save PDF</button>
-              <a className="btn btn-ghost" href={mailtoHref(result.purchase, settings)}>Email receipt</a>
-              <a className="btn btn-ghost" href={smsHref(result.purchase, settings)}>Text receipt</a>
+              {result.purchase.receiptRequested === 'email' ? (
+                <a className="btn btn-ghost" href={mailtoHref(result.purchase, settings)}>Email receipt</a>
+              ) : null}
+              {result.purchase.receiptRequested === 'text' ? (
+                <a className="btn btn-ghost" href={smsHref(result.purchase, settings)}>Text receipt</a>
+              ) : null}
+              {result.purchase.receiptRequested === 'none' ? <span className="hint">No receipt requested.</span> : null}
               <button type="button" className="btn btn-ghost" onClick={async () => {
                 await copyText(receiptText(result.purchase, settings));
                 setCopied(true);
@@ -343,6 +619,7 @@ export default function BuyScreen({ onManage }) {
         ) : null}
 
         <form className="card stack" onSubmit={submit}>
+          <fieldset className="buy-lock stack" disabled={saving || locked}>
           <h1>Log a buy</h1>
           <div className="grid-2">
             <label>Date
@@ -411,7 +688,7 @@ export default function BuyScreen({ onManage }) {
           <fieldset className="stack">
             <legend>Offer</legend>
             <label>Lot comp
-              <input type="number" min="0" step="0.01" inputMode="decimal" value={form.lotComp} onChange={(event) => setField('lotComp', event.target.value)} />
+              <input type="number" min="0" step="0.01" inputMode="decimal" value={form.lotComp} onChange={(event) => onComp(event.target.value)} />
             </label>
             <div className="offer-row">
               <button type="button" className={form.payoutType === 'cash' ? 'offer selected' : 'offer'} onClick={() => chooseOffer('cash')}>
@@ -427,12 +704,13 @@ export default function BuyScreen({ onManage }) {
             </div>
             <div className="grid-2">
               <label>Percent of comp
-                <input type="number" min="0" step="0.1" value={form.percentageBought} onChange={(event) => onPercent(event.target.value)} />
+                <input type="number" min="0" step="0.1" inputMode="decimal" value={form.percentageBought} onChange={(event) => onPercent(event.target.value)} />
               </label>
               <label>Cost paid
-                <input type="number" min="0" step="0.01" inputMode="decimal" value={form.cost} onChange={(event) => setField('cost', event.target.value)} required />
+                <input type="number" min="0" step="0.01" inputMode="decimal" value={form.cost} onChange={(event) => onCost(event.target.value)} required />
               </label>
             </div>
+            <p className="hint">Percent of comp updates from the cost paid divided by the comp.</p>
             {decision.needed ? (
               <p className="banner warn">{decision.reasons.join(' ')} You can save it, and a manager approves it here or from the manager desk.</p>
             ) : null}
@@ -443,13 +721,19 @@ export default function BuyScreen({ onManage }) {
             <div className="pay-grid">
               {PAYMENT_METHODS.map((method) => (
                 <label key={method.key}>{method.label}
-                  <input type="number" min="0" step="0.01" inputMode="decimal" value={form[method.key]} onChange={(event) => setField(method.key, event.target.value)} />
+                  <input type="number" min="0" step="0.01" inputMode="decimal" value={form[method.key]} onChange={(event) => onTender(method.key, event.target.value)} />
                 </label>
               ))}
             </div>
-            {form.cost !== '' && paymentGap > 0.009 ? (
-              <p className="hint">Payment lines add up to {money(paymentsTotal(form))}. The cost is {money(form.cost)}.</p>
-            ) : null}
+            {!gap.matches ? (
+              <p className="banner warn" role="alert">
+                Payment boxes add up to {money(gap.paid)}. Cost paid is {money(gap.cost)}. Change the boxes so they match the cost.
+              </p>
+            ) : tendersFollow ? (
+              <p className="hint">{tenderName} is filled in from the cost paid. Change the boxes only if you split the payment.</p>
+            ) : (
+              <p className="hint">Payment boxes match the cost paid.</p>
+            )}
           </fieldset>
 
           {alert8300.over ? (
@@ -459,18 +743,8 @@ export default function BuyScreen({ onManage }) {
             </p>
           ) : null}
 
-          <div className="grid-2">
-            <label>Number of cards
-              <input type="number" min="0" step="1" value={form.numCards} onChange={(event) => setField('numCards', event.target.value)} />
-            </label>
-            <label>What happens to the cards next
-              <select value={form.inventoryStatus} onChange={(event) => setField('inventoryStatus', event.target.value)}>
-                {INVENTORY_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-              </select>
-            </label>
-          </div>
-          <label>Hold period in days
-            <input type="number" min="0" max="365" value={form.holdDays} onChange={(event) => setField('holdDays', event.target.value)} placeholder={settings.holdDays ? String(settings.holdDays) : '0 means no hold'} />
+          <label>Number of cards
+            <input type="number" min="0" step="1" value={form.numCards} onChange={(event) => setField('numCards', event.target.value)} />
           </label>
           <label>Notes
             <textarea rows="2" value={form.notes} onChange={(event) => setField('notes', event.target.value)} placeholder="Anything you would search later" />
@@ -536,15 +810,31 @@ export default function BuyScreen({ onManage }) {
 
           <PhotoPicker label="Photos of the cards" hint="Take a few. Later, tags can be added to each photo." files={cardFiles} onChange={setCardFiles} multiple limit={12} />
           <PhotoPicker label="Payment proof" hint="A screenshot of Cash App, Zelle, Venmo, or PayPal." files={paymentFiles} onChange={setPaymentFiles} multiple limit={4} />
-          <fieldset>
-            <legend>Seller signature</legend>
-            <SignaturePad onChange={setSignatureBlob} />
-          </fieldset>
 
+          {signatureBlob && !locked ? (
+            <p className="banner ok">
+              Seller signed.
+              {receiptChoice === 'text' ? ' They asked for a text receipt.' : ''}
+              {receiptChoice === 'email' ? ' They asked for an email receipt.' : ''}
+              {receiptChoice === 'none' ? ' No receipt.' : ''}
+              {' '}Change the buy and they will need to sign again.
+            </p>
+          ) : null}
           {error ? <p className="banner warn">{error}</p> : null}
-          <button className="btn btn-primary btn-save" type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Save and print slip'}
+          {!gap.matches ? (
+            <p className="banner warn" role="alert">
+              Payment boxes add up to {money(gap.paid)}. Cost paid is {money(gap.cost)}. They need to match before you continue.
+            </p>
+          ) : null}
+          <button
+            className="btn btn-primary btn-save"
+            type={signatureBlob || locked ? 'submit' : 'button'}
+            onClick={signatureBlob || locked ? undefined : goToSign}
+            disabled={saving || locked || !gap.matches}
+          >
+            {saving ? 'Saving…' : locked ? 'Saved' : signatureBlob ? 'Save and print label' : 'Next: seller signs'}
           </button>
+          </fieldset>
         </form>
       </main>
       {scanner ? (

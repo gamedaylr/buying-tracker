@@ -16,7 +16,7 @@ The buying screen has a **Manager desk** button. That desk has:
 - Edit, and remove. Removed buys can be restored. They are not erased.
 - Daily, weekly, monthly, and all-time totals
 - A people list, to add or disable logins
-- Shop settings: name, cash percent, store-credit percent, ID rule, approval amount, and hold days
+- Shop settings: name, cash percent, store-credit percent, ID rule, and approval amount
 - Seller history, including a printout and a download
 - An activity log of who logged, edited, approved, or removed a buy
 - A cash alert when one seller's cash is over $10,000 in a day, and a spreadsheet you can keep for a reporting service later. The app does not send that file anywhere.
@@ -48,7 +48,7 @@ Do these steps when you are ready to switch the live site. Until you publish the
 10. ID numbers: on your computer, if Node is installed, run `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. If that is awkward, any password manager can generate a long random string and you can base64-encode 32 random bytes. Put the result in `IDENTITY_ENCRYPTION_KEY`. Do not email it around, and do not change it later or old ID numbers cannot be read. If this variable is missing, the ID photo still saves, but the ID number and date of birth are not stored.
 11. Open the new site. You should see **Create the first manager**. Use your real email and a password you will remember. Do this immediately, before you share the link. That login can add everyone else.
 12. Open **Manager desk → People** and add each employee. Choose **Staff** for people who only log buys. Choose **Manager** for people who should see money, history, and ID photos. Tell them the email and password. They can use **Forgot password** on the sign-in screen later.
-13. Open **Manager desk → Settings** and set the cash percent, store-credit percent, the dollar amount that requires an ID, the amount that needs your approval, and the hold days. The starting values are cash 70%, store credit 80%, ID at $250, approval at $1,000, and no hold.
+13. Open **Manager desk → Settings** and set the cash percent, store-credit percent, the dollar amount that requires an ID, and the amount that needs your approval. The starting values are cash 70%, store credit 80%, ID at $250, and approval at $1,000. New buys are saved as bought, with no hold.
 
 To put the shop's own name on another copy of this app later, change the shop name in Settings and replace `public/gameday-logo.png`. New buys are stamped with a shop id. This version does not run two shops or take payments for the software.
 

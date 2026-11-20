@@ -5,7 +5,11 @@ import {
   applyManagerEdit,
   approvalDecision,
   buildPurchase,
+  cardsOnBuy,
   cashAlerts,
+  normalizeReceiptRequest,
+  receiptChoiceLabel,
+  receiptContactError,
   complianceToCsv,
   computeOffers,
   form8300Status,
@@ -15,9 +19,19 @@ import {
   normalizeSettings,
   purchasesToCsv,
   receiptText,
+  applyCompInput,
+  applyCostInput,
+  applyPercentInput,
+  emptyForm,
+  purchasesForTender,
+  sellerHistory,
+  sortPurchasesNewestFirst,
   summarize,
+  tenderBreakdown,
+  tenderGap,
   validateBuy,
 } from './buying';
+import { planSlipItems, printableDocument, receiptHtml, slipHtml } from './printHtml';
 
 const user = { uid: 'staff-1', name: 'Alex', email: 'alex@gameday.test' };
 
@@ -47,6 +61,38 @@ function form(overrides) {
     ...overrides,
   };
 }
+
+test('a receipt is sent only when the seller asks, and the choice is stored', () => {
+  expect(normalizeReceiptRequest(undefined)).toBe('none');
+  expect(normalizeReceiptRequest('text')).toBe('text');
+  expect(receiptContactError('none', '', '')).toBe('');
+  expect(receiptContactError('text', '555', '')).toMatch(/phone/);
+  expect(receiptContactError('text', '5015550100', '')).toBe('');
+  expect(receiptContactError('email', '', 'not-an-email')).toMatch(/email/);
+  expect(receiptContactError('email', '', 'sam@example.com')).toBe('');
+  const purchase = buildPurchase({
+    form: form({ sellerPhone: '5015550100', sellerEmail: '' }),
+    purchaseNumber: 12,
+    user,
+    settings: DEFAULT_SETTINGS,
+    photos: { cards: [], id: [], payment: [] },
+    lineItems: [],
+    userIsManager: true,
+    receiptRequested: 'text',
+  });
+  expect(purchase.receiptRequested).toBe('text');
+  expect(purchase.sellerPhone).toBe('5015550100');
+  expect(receiptChoiceLabel(undefined)).toBe('Not recorded');
+  expect(receiptChoiceLabel('none')).toBe('No receipt');
+  const edited = applyManagerEdit(purchase, form({ sellerPhone: '5015550100' }), []);
+  expect(edited.receiptRequested).toBe('text');
+});
+
+test('the seller handoff counts cards and leaves out the comp', () => {
+  expect(cardsOnBuy({ numCards: '4' }, [], 2)).toBe(4);
+  expect(cardsOnBuy({ numCards: '' }, [{ quantity: 2 }, { quantity: 1 }], 9)).toBe(3);
+  expect(cardsOnBuy({ numCards: '' }, [], 2)).toBe(2);
+});
 
 test('offers use the manager percentages', () => {
   const offers = computeOffers(200, { cashPercent: 70, creditPercent: 80 });
@@ -97,6 +143,13 @@ test('new purchases keep the original fields and stamp who logged them', () => {
   expect(purchase.deleted).toBe(false);
   expect(purchase.approvalStatus).toBe('not_required');
   expect(purchase.sellerPhone).toBe('5015550100');
+  expect(purchase.receiptRequested).toBe('none');
+  expect(purchase.inventoryStatus).toBe('bought');
+  expect(purchase.holdDays).toBe(0);
+  expect(purchase.holdUntil).toBe('');
+  expect(receiptText(purchase)).not.toMatch(/Do not sell|Hold/);
+  expect(receiptHtml(purchase, {})).not.toMatch(/Do not sell|Status:/);
+  expect(slipHtml(purchase, { shopName: 'GameDay Sports Cards' })).not.toMatch(/Do not sell|Hold period|inventory/);
 });
 
 test('a manager logging a large buy is stamped approved', () => {
@@ -274,6 +327,131 @@ test('receipt text and the next slip number stay compatible with old rows', () =
   });
   expect(receiptText(purchase)).toMatch(/store credit/i);
   expect(nextPurchaseNumberFrom([{ purchaseNumber: 2 }, { purchaseNumber: 925 }])).toBe(926);
+});
+
+test('newest slips sort first, including rows saved before sign-in', () => {
+  const rows = [
+    { purchaseNumber: 1, date: '2026-06-01', timestamp: '2026-06-01T12:00:00.000Z', firebaseKey: 'a' },
+    { purchaseNumber: 926, date: '2026-11-20', timestamp: '2026-11-20T18:00:00.000Z', firebaseKey: 'm' },
+    { purchaseNumber: 50, date: '2026-08-01', firebaseKey: 'b' },
+  ];
+  expect(sortPurchasesNewestFirst(rows).map((row) => row.purchaseNumber)).toEqual([926, 50, 1]);
+  const tied = [
+    { purchaseNumber: 4, timestamp: '2026-11-20T12:00:00.000Z', date: '2026-11-01' },
+    { purchaseNumber: 4, timestamp: '2026-11-20T15:00:00.000Z', date: '2026-11-01' },
+  ];
+  expect(sortPurchasesNewestFirst(tied).map((row) => row.timestamp)).toEqual([
+    '2026-11-20T15:00:00.000Z',
+    '2026-11-20T12:00:00.000Z',
+  ]);
+});
+
+test('seller history is newest first and still matches old rows by name', () => {
+  const seller = { id: 's1', name: 'Sam Seller' };
+  const rows = [
+    { purchaseNumber: 2, sellerId: 's1', boughtFrom: 'Sam Seller', deleted: false },
+    { purchaseNumber: 9, sellerId: '', boughtFrom: 'Sam Seller', deleted: false },
+    { purchaseNumber: 8, sellerId: 'other', boughtFrom: 'Pat', deleted: false },
+    { purchaseNumber: 7, sellerId: 's1', boughtFrom: 'Sam Seller', deleted: true },
+  ];
+  expect(sellerHistory(rows, seller).map((row) => row.purchaseNumber)).toEqual([9, 2]);
+});
+
+test('cost and comp fill the percent, and one tender follows until the payment is split', () => {
+  const start = emptyForm({ name: 'Alex' }, DEFAULT_SETTINGS);
+  const withComp = applyCompInput(start, '10');
+  const withCost = applyCostInput(withComp, '5', { tendersFollowCost: true });
+  expect(withCost.percentageBought).toBe('50');
+  expect(withCost.cash).toBe('5');
+  expect(withCost.storeCredit).toBe('');
+  expect(tenderGap(withCost).matches).toBe(true);
+  const split = applyCostInput({ ...withCost, cash: '3', venmo: '2' }, '6', { tendersFollowCost: false });
+  expect(split.cash).toBe('3');
+  expect(split.venmo).toBe('2');
+  expect(split.percentageBought).toBe('60');
+  expect(tenderGap(split).matches).toBe(false);
+  const credit = applyCostInput({ ...withComp, payoutType: 'store_credit' }, '8', { tendersFollowCost: true });
+  expect(credit.storeCredit).toBe('8');
+  expect(credit.cash).toBe('');
+  expect(credit.percentageBought).toBe('80');
+  const fromPercent = applyPercentInput(withComp, '70', { tendersFollowCost: true });
+  expect(fromPercent.cost).toBe('7');
+  expect(fromPercent.cash).toBe('7');
+  expect(fromPercent.percentageBought).toBe('70');
+});
+
+test('tender breakdown is per payment type for the selected dates', () => {
+  const rows = [
+    { date: '2026-11-20', cost: 10, cash: 5, storeCredit: 5, purchaseNumber: 2, deleted: false },
+    { date: '2026-11-20', cost: 8, cashApp: 8, purchaseNumber: 3, deleted: false },
+    { date: '2026-11-19', cost: 4, cash: 4, purchaseNumber: 1, deleted: false },
+    { date: '2026-11-20', cost: 9, cash: 9, purchaseNumber: 4, deleted: true },
+  ];
+  const range = { from: '2026-11-20', to: '2026-11-20' };
+  const breakdown = tenderBreakdown(rows, range);
+  expect(breakdown.find((row) => row.key === 'cash')).toMatchObject({ total: 5, count: 1 });
+  expect(breakdown.find((row) => row.key === 'storeCredit')).toMatchObject({ total: 5, count: 1 });
+  expect(breakdown.find((row) => row.key === 'cashApp')).toMatchObject({ total: 8, count: 1 });
+  expect(breakdown.find((row) => row.key === 'venmo')).toMatchObject({ total: 0, count: 0 });
+  expect(purchasesForTender(rows, range, 'cashApp').map((row) => row.purchaseNumber)).toEqual([3]);
+  expect(purchasesForTender(rows, { from: '', to: '' }, 'cash').map((row) => row.purchaseNumber)).toEqual([2, 1]);
+});
+
+test('the thermal slip is one 4x6 label and keeps a long list on that label', () => {
+  const short = {
+    purchaseNumber: 926,
+    date: '2026-11-20',
+    timestamp: '2026-11-20T20:41:00.000Z',
+    boughtFrom: 'Sam Seller',
+    sellerPhone: '5015550100',
+    loggedByName: 'Jim',
+    buyerName: 'Jim',
+    lotComp: 10,
+    percentageBought: 50,
+    cost: 7,
+    cash: 5,
+    storeCredit: 2,
+    lineItems: [
+      { id: 'a', description: '2023 Topps Chrome', quantity: 1, grader: 'PSA', certNumber: '12345678', amount: 4 },
+      { id: 'b', description: 'Prizm lot', quantity: 2 },
+    ],
+  };
+  const html = slipHtml(short, { shopName: 'GameDay Sports Cards', signatureUrl: 'blob:sig' });
+  expect(html).toContain('size: 4in 6in');
+  expect(html).toContain('overflow: hidden');
+  expect(html).toContain('#926');
+  expect(html).toContain('Sam Seller');
+  expect(html).toContain('(501) 555-0100');
+  expect(html).toContain('Logged by');
+  expect(html).toContain('Jim');
+  expect(html).toContain('2023 Topps Chrome');
+  expect(html).toContain('PSA');
+  expect(html).toContain('#12345678');
+  expect(html).toContain('$4.00');
+  expect(html).toContain('2×');
+  expect(html).toContain('COST');
+  expect(html).toContain('$7.00');
+  expect(html).toContain('Store credit');
+  expect(html).toContain('50% of $10.00 comp');
+  expect(receiptText(short)).not.toMatch(/\bcomp\b|%/i);
+  expect(receiptHtml(short, { shopName: 'GameDay Sports Cards' })).not.toMatch(/\bcomp\b|% of|Cash offer|Store credit offer/i);
+  expect(html).toContain('blob:sig');
+  expect(html).not.toContain('#444');
+  const many = Array.from({ length: 20 }, (_, index) => ({
+    id: `c${index}`,
+    description: `Card ${String(index + 1).padStart(2, '0')}`,
+    quantity: 1,
+  }));
+  const longHtml = slipHtml({ ...short, lineItems: many, cash: 7, storeCredit: 0 }, { shopName: 'GameDay' });
+  const planned = planSlipItems({ ...short, lineItems: many, cash: 7, storeCredit: 0 });
+  expect(planned.rows.length).toBeLessThan(20);
+  expect(planned.moreCards).toBeGreaterThan(0);
+  expect(longHtml).toContain('Card 01');
+  expect(longHtml).not.toContain('Card 20');
+  expect(longHtml).toContain(`${planned.moreCards} more cards, see receipt`);
+  const printed = printableDocument(html, { autoPrint: true });
+  expect(printed).toContain('window.print()');
+  expect(printableDocument(html).includes('addEventListener("load"')).toBe(false);
 });
 
 test('csv cells that start with a formula character are neutralized', () => {

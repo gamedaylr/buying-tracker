@@ -15,12 +15,19 @@ import {
   lineItemsOf,
   matchesSearch,
   money,
+  num,
+  receiptChoiceLabel,
+  paymentSummary,
+  purchaseInRange,
+  purchasesForTender,
   purchasesToCsv,
   sellerHistory,
+  sortPurchasesNewestFirst,
   startOfMonthISO,
   startOfWeekISO,
   statusLabel,
-  summarize,
+  sumPurchases,
+  tenderBreakdown,
   todayISO,
 } from '../lib/buying';
 import { plainError } from '../lib/errors';
@@ -28,7 +35,7 @@ import { receiptHtml, sellerReportHtml, slipHtml } from '../lib/printHtml';
 import { createShopUser, setUserDisabled } from '../services/accounts';
 import { decryptIdentity } from '../services/api';
 import { downloadUrl } from '../services/photos';
-import { absoluteAsset, downloadText, printHtml } from '../services/print';
+import { absoluteAsset, closePrintWindow, downloadText, preparePrintWindow, printHtml } from '../services/print';
 import { rowsFromSnapshot, saveManagerEdit, setPurchaseDeleted } from '../services/purchases';
 
 const TABS = [
@@ -163,13 +170,21 @@ export default function ManagerDesk() {
   const [error, setError] = useState('');
 
   const filtered = useMemo(
-    () => purchases.rows.filter((purchase) => matchesSearch(purchase, filters)),
+    () => sortPurchasesNewestFirst(purchases.rows.filter((purchase) => matchesSearch(purchase, filters))),
     [purchases.rows, filters],
   );
+  useEffect(() => {
+    setVisible(40);
+  }, [filters]);
   const open = purchases.rows.find((purchase) => purchase.firebaseKey === openId);
 
-  function printSlip(purchase) {
-    printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+  async function printSlip(purchase) {
+    const preparedWindow = preparePrintWindow();
+    let signatureUrl = '';
+    const path = purchase.photos && purchase.photos.signature && purchase.photos.signature.storagePath;
+    if (path) signatureUrl = await downloadUrl(path).catch(() => '');
+    const opened = printHtml(slipHtml(purchase, { shopName: settings.shopName, signatureUrl }), { preparedWindow });
+    if (!opened) closePrintWindow(preparedWindow);
   }
   async function printReceipt(purchase) {
     let signatureUrl = '';
@@ -246,9 +261,9 @@ export default function ManagerDesk() {
                 </select>
               </label>
             </div>
-            <p className="hint">{filtered.length} buys</p>
+              <p className="hint">{filtered.length} buys, newest first</p>
             {filtered.slice(0, visible).map((purchase) => (
-              <article className="card tx" key={purchase.firebaseKey}>
+              <article className="card tx" key={purchase.firebaseKey} data-testid="buy-row" data-slip={purchase.purchaseNumber}>
                 <button type="button" className="tx-main" onClick={() => { setOpenId(purchase.firebaseKey === openId ? '' : purchase.firebaseKey); setEditing(false); }}>
                   <strong>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)}</strong>
                   <span>{purchase.boughtFrom || 'No seller'} · {money(purchase.cost)}</span>
@@ -260,13 +275,15 @@ export default function ManagerDesk() {
                 {openId === purchase.firebaseKey && open ? (
                   <div className="stack">
                     <p>{purchase.payoutType === 'store_credit' ? 'Took store credit' : 'Took cash'} · {statusLabel(purchase.inventoryStatus)}{purchase.holdUntil ? ` · do not sell until ${formatDisplayDate(purchase.holdUntil)}` : ''}</p>
+                    {num(purchase.lotComp) > 0 ? <p>Comp {money(purchase.lotComp)} · {purchase.percentageBought || 0}% of comp</p> : null}
+                    <p>Receipt requested: {receiptChoiceLabel(purchase.receiptRequested)}</p>
                     <p>{lineItemsOf(purchase).map((item) => `${item.description || 'Item'} ${item.grader || ''} ${item.certNumber || ''} ${item.verificationStatus || ''}`).join(' · ')}</p>
                     {purchase.notes ? <p>{purchase.notes}</p> : null}
                     <PhotoStrip label="Card photos" photos={(purchase.photos && purchase.photos.cards) || {}} />
                     <PhotoStrip label="Payment proof" photos={(purchase.photos && purchase.photos.payment) || {}} />
                     <PhotoStrip label="Seller ID" photos={(purchase.photos && purchase.photos.id) || {}} reveal />
                     <div className="row-actions">
-                      <button type="button" className="btn btn-ghost" onClick={() => printSlip(purchase)}>Print slip</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => printSlip(purchase)}>Print label</button>
                       <button type="button" className="btn btn-ghost" onClick={() => printReceipt(purchase)}>Print / PDF</button>
                       <button type="button" className="btn btn-ghost" onClick={() => setEditing((value) => !value)}>{editing ? 'Close edit' : 'Edit'}</button>
                       <button type="button" className="btn btn-ghost" onClick={async () => {
@@ -283,7 +300,7 @@ export default function ManagerDesk() {
                 ) : null}
               </article>
             ))}
-            {visible < filtered.length ? <button type="button" className="btn btn-ghost" onClick={() => setVisible((count) => count + 40)}>Show more</button> : null}
+            {visible < filtered.length ? <button type="button" className="btn btn-ghost" onClick={() => setVisible((count) => count + 40)}>Show older buys</button> : null}
           </section>
         )}
       </main>
@@ -291,29 +308,157 @@ export default function ManagerDesk() {
   );
 }
 
-function SummaryPanel({ purchases }) {
-  const day = todayISO();
-  const totals = summarize(purchases, { day, weekStart: startOfWeekISO(), monthStart: startOfMonthISO() });
-  const blocks = [
-    ['Today', totals.day],
-    ['This week', totals.week],
-    ['This month', totals.month],
-    ['All time', totals.all],
-  ];
+function rangeCaption(range) {
+  if (!range.from && !range.to) return 'All time';
+  if (range.from && range.to && range.from === range.to) return formatDisplayDate(range.from);
+  if (range.from && range.to) return `${formatDisplayDate(range.from)} – ${formatDisplayDate(range.to)}`;
+  if (range.from) return `From ${formatDisplayDate(range.from)}`;
+  return `Through ${formatDisplayDate(range.to)}`;
+}
+
+function StatButton({ label, value, onClick }) {
   return (
-    <section className="stack">
-      {blocks.map(([label, block]) => (
-        <article className="card" key={label}>
-          <h2>{label}</h2>
-          <div className="stat-grid">
-            <div><span>Slips</span><strong>{block.slips}</strong></div>
-            <div><span>Total</span><strong>{money(block.cost)}</strong></div>
-            <div><span>Cash out</span><strong>{money(block.cashDrawer)}</strong></div>
-            <div><span>Store credit</span><strong>{money(block.storeCredit)}</strong></div>
-            <div><span>Cards</span><strong>{block.cards}</strong></div>
-            <div><span>Needs manager</span><strong>{block.pending}</strong></div>
-          </div>
+    <button type="button" className="stat-btn" onClick={onClick}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </button>
+  );
+}
+
+function RangeCard({ title, range, purchases, onOpen }) {
+  const block = sumPurchases((purchases || []).filter((purchase) => purchaseInRange(purchase, range)));
+  return (
+    <article className="card stack">
+      <h2>{title}</h2>
+      <p className="hint">{rangeCaption(range)}. Tap a total to see how it was paid.</p>
+      <div className="stat-grid">
+        <StatButton label="Slips" value={String(block.slips)} onClick={onOpen} />
+        <StatButton label="Total" value={money(block.cost)} onClick={onOpen} />
+        <StatButton label="Cash out" value={money(block.cashDrawer)} onClick={onOpen} />
+        <StatButton label="Store credit" value={money(block.storeCredit)} onClick={onOpen} />
+        <StatButton label="Cards" value={String(block.cards)} onClick={onOpen} />
+        <StatButton label="Needs manager" value={String(block.pending)} onClick={onOpen} />
+      </div>
+    </article>
+  );
+}
+
+function TenderDrill({ purchases, range, title, onBack, onPick }) {
+  const rows = tenderBreakdown(purchases, range);
+  const block = sumPurchases((purchases || []).filter((purchase) => purchaseInRange(purchase, range)));
+  return (
+    <section className="stack" data-testid="tender-breakdown">
+      <button type="button" className="btn btn-ghost" onClick={onBack}>Back to summary</button>
+      <article className="card stack">
+        <h2>How buys were paid</h2>
+        <p>{title} · {rangeCaption(range)}</p>
+        <p className="hint">
+          {block.slips} slips · {money(block.cost)} total. Cash out ({money(block.cashDrawer)}) is cash plus the safe.
+          Tap a payment type to see those buys.
+        </p>
+      </article>
+      {rows.map((row) => (
+        <button type="button" className="card tender-row" key={row.key} data-testid={`tender-${row.key}`} onClick={() => onPick(row.key)}>
+          <strong>{row.label}</strong>
+          <span>{money(row.total)}</span>
+          <span className="hint">{row.count} {row.count === 1 ? 'buy' : 'buys'}</span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function TenderBuys({ purchases, range, methodKey, title, onBack }) {
+  const method = tenderBreakdown(purchases, range).find((row) => row.key === methodKey)
+    || { key: methodKey, label: methodKey, total: 0, count: 0 };
+  const rows = purchasesForTender(purchases, range, method.key);
+  return (
+    <section className="stack" data-testid="tender-buys">
+      <button type="button" className="btn btn-ghost" onClick={onBack}>Back to payment types</button>
+      <article className="card stack">
+        <h2>{method.label}</h2>
+        <p>{title} · {rangeCaption(range)}</p>
+        <p className="hint">{money(method.total)} across {method.count} {method.count === 1 ? 'buy' : 'buys'}</p>
+      </article>
+      {rows.length === 0 ? <p className="card">No buys were paid with {method.label} in this range.</p> : rows.map((purchase) => (
+        <article className="card" key={purchase.firebaseKey || purchase.purchaseNumber} data-testid="tender-buy">
+          <strong>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)}</strong>
+          <p>{purchase.boughtFrom || 'No seller'} · {method.label} {money(purchase[method.key])}</p>
+          <p className="hint">Cost {money(purchase.cost)}{paymentSummary(purchase) ? ` · ${paymentSummary(purchase)}` : ''}</p>
         </article>
+      ))}
+    </section>
+  );
+}
+
+function SummaryPanel({ purchases }) {
+  const today = todayISO();
+  const periods = [
+    { id: 'day', title: 'Today', from: today, to: today },
+    { id: 'week', title: 'This week', from: startOfWeekISO(), to: today },
+    { id: 'month', title: 'This month', from: startOfMonthISO(), to: today },
+    { id: 'all', title: 'All time', from: '', to: '' },
+  ];
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [drill, setDrill] = useState(null);
+  const customActive = Boolean(customFrom || customTo);
+  const customRange = { id: 'custom', title: 'Selected dates', from: customFrom, to: customTo };
+
+  function openRange(period) {
+    setDrill({
+      level: 'tenders',
+      range: { from: period.from, to: period.to },
+      title: period.title,
+      methodKey: '',
+    });
+  }
+
+  if (drill && drill.level === 'buys') {
+    return (
+      <TenderBuys
+        purchases={purchases}
+        range={drill.range}
+        methodKey={drill.methodKey}
+        title={drill.title}
+        onBack={() => setDrill({ ...drill, level: 'tenders', methodKey: '' })}
+      />
+    );
+  }
+  if (drill && drill.level === 'tenders') {
+    return (
+      <TenderDrill
+        purchases={purchases}
+        range={drill.range}
+        title={drill.title}
+        onBack={() => setDrill(null)}
+        onPick={(methodKey) => setDrill({ ...drill, level: 'buys', methodKey })}
+      />
+    );
+  }
+
+  return (
+    <section className="stack" data-testid="summary-panel">
+      <article className="card stack">
+        <h2>Date range</h2>
+        <p className="hint">Pick a day or a range, then tap Cash out or any total. Managers are the only people who see this.</p>
+        <div className="grid-2">
+          <label>From
+            <input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
+          </label>
+          <label>To
+            <input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
+          </label>
+        </div>
+        {customActive ? (
+          <button type="button" className="btn btn-ghost" onClick={() => { setCustomFrom(''); setCustomTo(''); }}>Clear dates</button>
+        ) : null}
+      </article>
+      {customActive ? (
+        <RangeCard title="Selected dates" range={customRange} purchases={purchases} onOpen={() => openRange(customRange)} />
+      ) : null}
+      {periods.map((period) => (
+        <RangeCard key={period.id} title={period.title} range={period} purchases={purchases} onOpen={() => openRange(period)} />
       ))}
     </section>
   );
@@ -419,10 +564,6 @@ function SettingsPanel({ settings }) {
         <input type="number" min="0" step="0.01" value={form.approvalAmount} onChange={(event) => set('approvalAmount', event.target.value)} />
       </label>
       <p className="hint">Use 0 if the dollar amount should not force approval. Offers above the cash or store-credit percent still need a manager.</p>
-      <label>Default hold, in days
-        <input type="number" min="0" max="365" value={form.holdDays} onChange={(event) => set('holdDays', event.target.value)} />
-      </label>
-      <p className="hint">0 means no hold. A hold reminds the shop not to sell those cards until the date on the buy.</p>
       {error ? <p className="banner warn">{error}</p> : null}
       {notice ? <p className="banner ok">{notice}</p> : null}
       <button className="btn btn-primary" type="submit">Save settings</button>
@@ -497,9 +638,14 @@ function SellersPanel({ sellers, purchases, settings, firebaseUser }) {
           </div>
           {privateInfo ? <pre className="private-box">{privateInfo.note || `ID ${privateInfo.idNumber || ''}\nDOB ${privateInfo.dob || ''}\n${privateInfo.address || ''} ${privateInfo.city || ''} ${privateInfo.state || ''} ${privateInfo.zip || ''}`}</pre> : null}
           {error ? <p className="banner warn">{error}</p> : null}
-          {history.map((purchase) => (
-            <p key={purchase.firebaseKey}>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)} · {money(purchase.cost)} · {statusLabel(purchase.inventoryStatus)}</p>
-          ))}
+          <div className="stack">
+            {history.map((purchase) => (
+              <article className="history-card" key={purchase.firebaseKey}>
+                <strong>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)}</strong>
+                <span>{money(purchase.cost)} · {statusLabel(purchase.inventoryStatus)}</span>
+              </article>
+            ))}
+          </div>
         </article>
       ) : null}
     </section>
