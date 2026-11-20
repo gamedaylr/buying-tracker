@@ -68,6 +68,7 @@ export async function savePurchase({
   signatureBlob,
   lineItems,
   identity,
+  receiptRequested,
 }) {
   const purchaseId = push(ref(db, 'purchases')).key;
   const sellerId = (seller && seller.id) || push(ref(db, 'sellers')).key;
@@ -127,6 +128,7 @@ export async function savePurchase({
       photoPath: (uploaded.cards.find((photo) => photo.lineItemId === item.id) || {}).storagePath || '',
     })),
     userIsManager: profile.role === 'manager' || profile.role === 'admin',
+    receiptRequested,
   });
 
   let identityWarning = '';

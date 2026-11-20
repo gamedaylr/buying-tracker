@@ -7,6 +7,9 @@ import {
   buildPurchase,
   cardsOnBuy,
   cashAlerts,
+  normalizeReceiptRequest,
+  receiptChoiceLabel,
+  receiptContactError,
   complianceToCsv,
   computeOffers,
   form8300Status,
@@ -58,6 +61,32 @@ function form(overrides) {
     ...overrides,
   };
 }
+
+test('a receipt is sent only when the seller asks, and the choice is stored', () => {
+  expect(normalizeReceiptRequest(undefined)).toBe('none');
+  expect(normalizeReceiptRequest('text')).toBe('text');
+  expect(receiptContactError('none', '', '')).toBe('');
+  expect(receiptContactError('text', '555', '')).toMatch(/phone/);
+  expect(receiptContactError('text', '5015550100', '')).toBe('');
+  expect(receiptContactError('email', '', 'not-an-email')).toMatch(/email/);
+  expect(receiptContactError('email', '', 'sam@example.com')).toBe('');
+  const purchase = buildPurchase({
+    form: form({ sellerPhone: '5015550100', sellerEmail: '' }),
+    purchaseNumber: 12,
+    user,
+    settings: DEFAULT_SETTINGS,
+    photos: { cards: [], id: [], payment: [] },
+    lineItems: [],
+    userIsManager: true,
+    receiptRequested: 'text',
+  });
+  expect(purchase.receiptRequested).toBe('text');
+  expect(purchase.sellerPhone).toBe('5015550100');
+  expect(receiptChoiceLabel(undefined)).toBe('Not recorded');
+  expect(receiptChoiceLabel('none')).toBe('No receipt');
+  const edited = applyManagerEdit(purchase, form({ sellerPhone: '5015550100' }), []);
+  expect(edited.receiptRequested).toBe('text');
+});
 
 test('the seller handoff counts cards and leaves out the comp', () => {
   expect(cardsOnBuy({ numCards: '4' }, [], 2)).toBe(4);
@@ -114,6 +143,7 @@ test('new purchases keep the original fields and stamp who logged them', () => {
   expect(purchase.deleted).toBe(false);
   expect(purchase.approvalStatus).toBe('not_required');
   expect(purchase.sellerPhone).toBe('5015550100');
+  expect(purchase.receiptRequested).toBe('none');
   expect(purchase.inventoryStatus).toBe('bought');
   expect(purchase.holdDays).toBe(0);
   expect(purchase.holdUntil).toBe('');

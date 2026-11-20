@@ -20,6 +20,7 @@ import {
   num,
   paymentLines,
   priorCashForSeller,
+  receiptContactError,
   receiptText,
   smsHref,
   tenderGap,
@@ -36,7 +37,10 @@ import PhotoPicker from './PhotoPicker';
 import Scanner from './Scanner';
 import SignaturePad from './SignaturePad';
 
-function SellerSign({ shopName, amount, tenders, cards, photos, signed, onSign, onDone, onBack }) {
+function SellerSign({
+  shopName, amount, tenders, cards, photos, signed, onSign, onDone, onBack,
+  receiptChoice, onReceiptChoice, receiptPhone, onReceiptPhone, receiptEmail, onReceiptEmail, contactError,
+}) {
   const cardLabel = cards === 1 ? '1 card' : `${cards} cards`;
   return (
     <main className="seller-screen" data-testid="seller-sign">
@@ -57,6 +61,35 @@ function SellerSign({ shopName, amount, tenders, cards, photos, signed, onSign, 
         </div>
       ) : null}
       <p className="seller-agree">I agree to sell these cards to {shopName} for the amount above.</p>
+      <fieldset className="seller-receipt">
+        <legend>Want a receipt?</legend>
+        {[
+          ['none', 'No receipt'],
+          ['text', 'Text it to me'],
+          ['email', 'Email it to me'],
+        ].map(([value, label]) => (
+          <label className="check" key={value}>
+            <input
+              type="radio"
+              name="receipt"
+              checked={receiptChoice === value}
+              onChange={() => onReceiptChoice(value)}
+            />
+            {label}
+          </label>
+        ))}
+        {receiptChoice === 'text' ? (
+          <label>Phone for the text
+            <input inputMode="tel" autoComplete="tel" value={receiptPhone} onChange={(event) => onReceiptPhone(event.target.value)} />
+          </label>
+        ) : null}
+        {receiptChoice === 'email' ? (
+          <label>Email for the receipt
+            <input type="email" autoComplete="email" value={receiptEmail} onChange={(event) => onReceiptEmail(event.target.value)} />
+          </label>
+        ) : null}
+        {contactError ? <p className="banner warn">{contactError}</p> : null}
+      </fieldset>
       <SignaturePad tall onChange={onSign} />
       <div className="seller-actions">
         <button type="button" className="btn btn-primary btn-save" disabled={!signed} onClick={onDone}>Done</button>
@@ -106,6 +139,10 @@ export default function BuyScreen({ onManage }) {
   const [managerPassword, setManagerPassword] = useState('');
   const [approving, setApproving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [receiptChoice, setReceiptChoice] = useState('none');
+  const [receiptPhone, setReceiptPhone] = useState('');
+  const [receiptEmail, setReceiptEmail] = useState('');
+  const [contactError, setContactError] = useState('');
 
   const offers = computeOffers(form.lotComp, settings);
   const payoutType = inferPayoutType(form);
@@ -127,23 +164,31 @@ export default function BuyScreen({ onManage }) {
     () => (seller ? [] : findSellers(sellers, form.boughtFrom || form.sellerPhone)),
     [seller, sellers, form.boughtFrom, form.sellerPhone],
   );
-  const dealKey = useMemo(() => JSON.stringify({
-    form,
-    sellerId: seller && (seller.id || seller.firebaseKey || seller.name),
-    identity: identity ? { idNumber: identity.idNumber, dob: identity.dob, address: identity.address } : null,
-    lines: lineItems.map((item) => ({
-      id: item.id,
-      description: item.description,
-      quantity: item.quantity,
-      grader: item.grader,
-      certNumber: item.certNumber,
-      photoUrl: item.photoUrl,
-      verificationStatus: item.verificationStatus,
-    })),
-    cards: cardFiles.map((file) => file.id),
-    ids: idFiles.map((file) => file.id),
-    payments: paymentFiles.map((file) => file.id),
-  }), [form, seller, identity, lineItems, cardFiles, idFiles, paymentFiles]);
+  function dealSnapshot(nextForm) {
+    return JSON.stringify({
+      form: nextForm,
+      sellerId: seller && (seller.id || seller.firebaseKey || seller.name),
+      identity: identity ? { idNumber: identity.idNumber, dob: identity.dob, address: identity.address } : null,
+      lines: lineItems.map((item) => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        grader: item.grader,
+        certNumber: item.certNumber,
+        photoUrl: item.photoUrl,
+        verificationStatus: item.verificationStatus,
+      })),
+      cards: cardFiles.map((file) => file.id),
+      ids: idFiles.map((file) => file.id),
+      payments: paymentFiles.map((file) => file.id),
+    });
+  }
+  const dealKey = useMemo(
+    () => dealSnapshot(form),
+    // dealSnapshot closes over the same values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form, seller, identity, lineItems, cardFiles, idFiles, paymentFiles],
+  );
 
   useEffect(() => {
     if (!signedKey.current || signedKey.current === dealKey) return;
@@ -314,9 +359,13 @@ export default function BuyScreen({ onManage }) {
         signatureBlob,
         lineItems,
         identity,
+        receiptRequested: receiptChoice,
       });
       setResult(saved);
       setIdentity(null);
+      if (saved.purchase.receiptRequested === 'text' || saved.purchase.receiptRequested === 'email') {
+        openSellerReceipt(saved.purchase);
+      }
       const printed = printHtml(
         slipHtml(saved.purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }),
         { preparedWindow: printWindow, autoPrint: true },
@@ -385,6 +434,10 @@ export default function BuyScreen({ onManage }) {
     setPrintNote('');
     setTendersFollow(true);
     setStep('staff');
+    setReceiptChoice('none');
+    setReceiptPhone('');
+    setReceiptEmail('');
+    setContactError('');
     signedKey.current = '';
     savingRef.current = false;
   }
@@ -406,6 +459,9 @@ export default function BuyScreen({ onManage }) {
       return;
     }
     setError('');
+    setContactError('');
+    setReceiptPhone(form.sellerPhone || '');
+    setReceiptEmail(form.sellerEmail || '');
     setSignatureBlob(null);
     signedKey.current = '';
     setStep('sign');
@@ -419,8 +475,34 @@ export default function BuyScreen({ onManage }) {
 
   function finishSign() {
     if (!signatureBlob) return;
-    signedKey.current = dealKey;
+    const problem = receiptContactError(receiptChoice, receiptPhone, receiptEmail);
+    if (problem) {
+      setContactError(problem);
+      return;
+    }
+    setContactError('');
+    const nextForm = receiptChoice === 'text'
+      ? { ...form, sellerPhone: receiptPhone.trim() }
+      : receiptChoice === 'email'
+        ? { ...form, sellerEmail: receiptEmail.trim() }
+        : form;
+    signedKey.current = dealSnapshot(nextForm);
+    if (nextForm !== form) setForm(nextForm);
     setStep('staff');
+  }
+
+  function openSellerReceipt(purchase) {
+    const href = purchase.receiptRequested === 'email'
+      ? mailtoHref(purchase, settings)
+      : purchase.receiptRequested === 'text'
+        ? smsHref(purchase, settings)
+        : '';
+    if (!href) return;
+    const link = document.createElement('a');
+    link.href = href;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   useEffect(() => {
@@ -450,6 +532,13 @@ export default function BuyScreen({ onManage }) {
         onSign={setSignatureBlob}
         onDone={finishSign}
         onBack={backFromSign}
+        receiptChoice={receiptChoice}
+        onReceiptChoice={(value) => { setContactError(''); setReceiptChoice(value); }}
+        receiptPhone={receiptPhone}
+        onReceiptPhone={(value) => { setContactError(''); setReceiptPhone(value); }}
+        receiptEmail={receiptEmail}
+        onReceiptEmail={(value) => { setContactError(''); setReceiptEmail(value); }}
+        contactError={contactError}
       />
     );
   }
@@ -481,8 +570,13 @@ export default function BuyScreen({ onManage }) {
             <div className="row-actions">
               <button type="button" className="btn btn-primary" onClick={() => printSlip(result.purchase)}>Print slip</button>
               <button type="button" className="btn btn-ghost" onClick={() => printReceipt(result.purchase)}>Print / save PDF</button>
-              <a className="btn btn-ghost" href={mailtoHref(result.purchase, settings)}>Email receipt</a>
-              <a className="btn btn-ghost" href={smsHref(result.purchase, settings)}>Text receipt</a>
+              {result.purchase.receiptRequested === 'email' ? (
+                <a className="btn btn-ghost" href={mailtoHref(result.purchase, settings)}>Email receipt</a>
+              ) : null}
+              {result.purchase.receiptRequested === 'text' ? (
+                <a className="btn btn-ghost" href={smsHref(result.purchase, settings)}>Text receipt</a>
+              ) : null}
+              {result.purchase.receiptRequested === 'none' ? <span className="hint">No receipt requested.</span> : null}
               <button type="button" className="btn btn-ghost" onClick={async () => {
                 await copyText(receiptText(result.purchase, settings));
                 setCopied(true);
@@ -699,7 +793,13 @@ export default function BuyScreen({ onManage }) {
           <PhotoPicker label="Payment proof" hint="A screenshot of Cash App, Zelle, Venmo, or PayPal." files={paymentFiles} onChange={setPaymentFiles} multiple limit={4} />
 
           {signatureBlob && !locked ? (
-            <p className="banner ok">Seller signed. Save and print, or change the buy and they will need to sign again.</p>
+            <p className="banner ok">
+              Seller signed.
+              {receiptChoice === 'text' ? ' They asked for a text receipt.' : ''}
+              {receiptChoice === 'email' ? ' They asked for an email receipt.' : ''}
+              {receiptChoice === 'none' ? ' No receipt.' : ''}
+              {' '}Change the buy and they will need to sign again.
+            </p>
           ) : null}
           {error ? <p className="banner warn">{error}</p> : null}
           {!gap.matches ? (

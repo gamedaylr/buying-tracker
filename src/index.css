@@ -326,6 +326,15 @@ label.btn { position: relative; overflow: hidden; }
 
 .seller-agree { margin: 0; font-size: 1.05rem; line-height: 1.4; }
 
+.seller-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: transparent;
+}
+
+.seller-receipt legend { font-size: 1.15rem; }
+
 .seller-thumbs img { width: 112px; height: 112px; }
 
 .seller-actions {

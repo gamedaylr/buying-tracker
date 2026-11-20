@@ -277,6 +277,25 @@ export function paymentLines(purchase) {
     .filter((method) => method.amount > 0);
 }
 
+export function normalizeReceiptRequest(value) {
+  return value === 'text' || value === 'email' ? value : 'none';
+}
+
+export function receiptChoiceLabel(value) {
+  if (value === 'text') return 'Text';
+  if (value === 'email') return 'Email';
+  if (value === 'none') return 'No receipt';
+  return 'Not recorded';
+}
+
+export function receiptContactError(choice, phone, email) {
+  if (choice === 'text' && phoneDigits(phone).length < 10) return 'Enter the phone number for the text.';
+  if (choice === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim())) {
+    return 'Enter the email address for the receipt.';
+  }
+  return '';
+}
+
 /** Card count the seller is told. Line items win, then the number entered, then photos. */
 export function cardsOnBuy(form, lineItems, extraPhotos) {
   const lines = lineItems || [];
@@ -435,6 +454,7 @@ export function buildPurchase({
   photos,
   lineItems,
   userIsManager,
+  receiptRequested,
 }) {
   const normalized = normalizeSettings(settings);
   const payoutType = inferPayoutType(form);
@@ -478,6 +498,7 @@ export function buildPurchase({
     storeCredit: num(form.storeCredit),
     cost: num(form.cost),
     notes: String(form.notes || '').trim(),
+    receiptRequested: normalizeReceiptRequest(receiptRequested),
     shopId: normalized.shopId,
     timestamp: new Date().toISOString(),
     loggedByUid: user.uid,
@@ -804,7 +825,7 @@ export function purchasesToCsv(purchases) {
   const header = [
     'Purchase #', 'Date', 'Buyer', 'Logged by', 'Seller', 'Phone', 'Email', 'Comp', '% of comp',
     'Payout', 'Cards', 'Cash', 'Safe', 'Cash App', 'Venmo', 'Zelle', 'PayPal', 'Trade', 'Store credit',
-    'Cost', 'Status', 'Approval', 'Hold until', 'Notes', 'Certs', 'Needs review', 'Deleted',
+    'Cost', 'Status', 'Approval', 'Hold until', 'Notes', 'Certs', 'Needs review', 'Deleted', 'Receipt',
   ];
   const rows = (purchases || []).map((purchase) => {
     const certs = lineItemsOf(purchase)
@@ -839,6 +860,7 @@ export function purchasesToCsv(purchases) {
       certs,
       purchase.needsReview ? 'yes' : '',
       purchase.deleted ? 'yes' : '',
+      receiptChoiceLabel(purchase.receiptRequested),
     ].map(csvCell).join(',');
   });
   return [header.map(csvCell).join(','), ...rows].join('\n');
