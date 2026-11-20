@@ -502,20 +502,6 @@ export default function BuyScreen({ onManage }) {
     setStep('staff');
   }
 
-  function openSellerReceipt(purchase) {
-    const href = purchase.receiptRequested === 'email'
-      ? mailtoHref(purchase, settings)
-      : purchase.receiptRequested === 'text'
-        ? smsHref(purchase, settings)
-        : '';
-    if (!href) return;
-    const link = document.createElement('a');
-    link.href = href;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }
-
   useEffect(() => {
     if (!result) return undefined;
     const node = document.querySelector('[data-testid="saved-buy"]');
@@ -527,9 +513,19 @@ export default function BuyScreen({ onManage }) {
     if (labelStatus !== 'check' || !pendingReceipt.current) return undefined;
     const purchase = pendingReceipt.current;
     pendingReceipt.current = null;
-    openSellerReceipt(purchase);
+    const href = purchase.receiptRequested === 'email'
+      ? mailtoHref(purchase, settings)
+      : purchase.receiptRequested === 'text'
+        ? smsHref(purchase, settings)
+        : '';
+    if (!href) return undefined;
+    const link = document.createElement('a');
+    link.href = href;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
     return undefined;
-  }, [labelStatus]);
+  }, [labelStatus, settings]);
 
   const gap = tenderGap(form);
   const locked = Boolean(result);
