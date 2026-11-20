@@ -283,7 +283,7 @@ export default function ManagerDesk() {
                     <PhotoStrip label="Payment proof" photos={(purchase.photos && purchase.photos.payment) || {}} />
                     <PhotoStrip label="Seller ID" photos={(purchase.photos && purchase.photos.id) || {}} reveal />
                     <div className="row-actions">
-                      <button type="button" className="btn btn-ghost" onClick={() => printSlip(purchase)}>Print slip</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => printSlip(purchase)}>Print label</button>
                       <button type="button" className="btn btn-ghost" onClick={() => printReceipt(purchase)}>Print / PDF</button>
                       <button type="button" className="btn btn-ghost" onClick={() => setEditing((value) => !value)}>{editing ? 'Close edit' : 'Edit'}</button>
                       <button type="button" className="btn btn-ghost" onClick={async () => {

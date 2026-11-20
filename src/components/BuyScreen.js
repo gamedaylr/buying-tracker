@@ -31,7 +31,7 @@ import { plainError } from '../lib/errors';
 import { lookupCert } from '../services/api';
 import { approveWithManagerLogin } from '../services/accounts';
 import { savePurchase } from '../services/purchases';
-import { absoluteAsset, closePrintWindow, copyText, preparePrintWindow, printHtml } from '../services/print';
+import { absoluteAsset, closePrintWindow, copyText, preparePrintWindow, printHtml, watchLabelPrint } from '../services/print';
 import { receiptHtml, slipHtml } from '../lib/printHtml';
 import PhotoPicker from './PhotoPicker';
 import Scanner from './Scanner';
@@ -135,6 +135,9 @@ export default function BuyScreen({ onManage }) {
   const [printNote, setPrintNote] = useState('');
   const [tendersFollow, setTendersFollow] = useState(true);
   const savingRef = useRef(false);
+  const labelWatch = useRef(() => {});
+  const pendingReceipt = useRef(null);
+  const [labelStatus, setLabelStatus] = useState('');
   const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
   const [approving, setApproving] = useState(false);
@@ -363,17 +366,10 @@ export default function BuyScreen({ onManage }) {
       });
       setResult(saved);
       setIdentity(null);
-      if (saved.purchase.receiptRequested === 'text' || saved.purchase.receiptRequested === 'email') {
-        openSellerReceipt(saved.purchase);
-      }
-      const printed = printHtml(
-        slipHtml(saved.purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }),
-        { preparedWindow: printWindow, autoPrint: true },
-      );
-      if (!printed) {
-        closePrintWindow(printWindow);
-        setPrintNote('The slip is saved. Tap Print slip to open the printer.');
-      }
+      pendingReceipt.current = saved.purchase.receiptRequested === 'text' || saved.purchase.receiptRequested === 'email'
+        ? saved.purchase
+        : null;
+      startLabelPrint(saved.purchase, { preparedWindow: printWindow, autoPrint: true });
     } catch (err) {
       closePrintWindow(printWindow);
       setError(plainError(err));
@@ -388,9 +384,24 @@ export default function BuyScreen({ onManage }) {
     return URL.createObjectURL(signatureBlob);
   }
 
+  function startLabelPrint(purchase, { preparedWindow, autoPrint }) {
+    labelWatch.current();
+    const win = printHtml(
+      slipHtml(purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }),
+      { preparedWindow, autoPrint, trackLabel: true },
+    );
+    if (!win) {
+      closePrintWindow(preparedWindow);
+      setLabelStatus('blocked');
+      return;
+    }
+    setLabelStatus('dialog');
+    labelWatch.current = watchLabelPrint(win, setLabelStatus);
+  }
+
   function printSlip(purchase) {
-    const opened = printHtml(slipHtml(purchase, { shopName: settings.shopName, signatureUrl: signatureUrl() }));
-    if (!opened) setPrintNote('The browser blocked the print window. Allow pop-ups for this site, then tap Print slip again.');
+    const preparedWindow = preparePrintWindow();
+    startLabelPrint(purchase, { preparedWindow, autoPrint: false });
   }
 
   function printReceipt(purchase) {
@@ -512,6 +523,14 @@ export default function BuyScreen({ onManage }) {
     return undefined;
   }, [result]);
 
+  useEffect(() => {
+    if (labelStatus !== 'check' || !pendingReceipt.current) return undefined;
+    const purchase = pendingReceipt.current;
+    pendingReceipt.current = null;
+    openSellerReceipt(purchase);
+    return undefined;
+  }, [labelStatus]);
+
   const gap = tenderGap(form);
   const locked = Boolean(result);
   const tenderName = form.payoutType === 'store_credit' ? 'Store credit' : 'Cash';
@@ -567,8 +586,12 @@ export default function BuyScreen({ onManage }) {
             ) : null}
             {result.identityWarning ? <p className="banner warn">{result.identityWarning}</p> : null}
             {printNote ? <p className="banner warn">{printNote}</p> : null}
+            {labelStatus === 'dialog' ? <p className="banner ok">Printing the card label. It goes with the cards.</p> : null}
+            {labelStatus === 'blocked' ? <p className="banner warn">The label did not print. Pop-up windows are blocked. Tap Reprint label. It goes with the cards.</p> : null}
+            {labelStatus === 'cancelled' ? <p className="banner warn">The label was not printed. Tap Reprint label before you put the cards away.</p> : null}
+            {labelStatus === 'check' ? <p className="banner warn">If you cancelled the label, or nothing came out, tap Reprint label. It goes with the cards.</p> : null}
             <div className="row-actions">
-              <button type="button" className="btn btn-primary" onClick={() => printSlip(result.purchase)}>Print slip</button>
+              <button type="button" className="btn btn-primary" onClick={() => printSlip(result.purchase)}>Reprint label</button>
               <button type="button" className="btn btn-ghost" onClick={() => printReceipt(result.purchase)}>Print / save PDF</button>
               {result.purchase.receiptRequested === 'email' ? (
                 <a className="btn btn-ghost" href={mailtoHref(result.purchase, settings)}>Email receipt</a>
@@ -813,7 +836,7 @@ export default function BuyScreen({ onManage }) {
             onClick={signatureBlob || locked ? undefined : goToSign}
             disabled={saving || locked || !gap.matches}
           >
-            {saving ? 'Saving…' : locked ? 'Saved' : signatureBlob ? 'Save and print slip' : 'Next: seller signs'}
+            {saving ? 'Saving…' : locked ? 'Saved' : signatureBlob ? 'Save and print label' : 'Next: seller signs'}
           </button>
           </fieldset>
         </form>

@@ -35,9 +35,22 @@ const PRINT_CHROME = `
 </style>`;
 
 /** Adds a Print button, and optionally prints when the page finishes loading. */
-export function printableDocument(html, { autoPrint = false } = {}) {
-  const script = autoPrint
-    ? '<script>window.addEventListener("load",function(){try{window.focus();window.print();}catch(e){}});window.addEventListener("afterprint",function(){window.close();});</script>'
+export function printableDocument(html, { autoPrint = false, trackLabel = false } = {}) {
+  const script = trackLabel || autoPrint
+    ? `<script>(function(){
+        var opened=false;
+        function tell(result){
+          try{
+            if(!window.opener||window.opener.closed)return;
+            var origin='*';
+            try{origin=window.opener.location.origin;}catch(e){}
+            window.opener.postMessage({source:'gameday-label',result:result},origin);
+          }catch(e){}
+        }
+        window.addEventListener('beforeprint',function(){opened=true;tell('dialog-opened');});
+        window.addEventListener('afterprint',function(){tell(opened?'dialog-closed':'skipped');setTimeout(function(){window.close();},200);});
+        ${autoPrint ? "window.addEventListener('load',function(){try{window.focus();window.print();}catch(e){tell('skipped');}});" : ''}
+      })();</script>`
     : '';
   const bar = '<div class="print-bar"><button type="button" onclick="window.print()">Print</button></div>';
   let next = String(html || '');
@@ -150,6 +163,9 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
   const tenders = paymentLines(source).map((line) => (
     `<div class="tender"><span>${escapeHtml(line.label)}</span><span>${money(line.amount)}</span></div>`
   )).join('');
+  const comp = Number(source.lotComp) > 0
+    ? `<div class="tender"><span>${escapeHtml(String(Number(source.percentageBought) || 0))}% of ${money(source.lotComp)} comp</span></div>`
+    : '';
   const pending = source.approvalStatus === 'pending'
     ? '<div class="flag">PENDING APPROVAL</div>'
     : '';
@@ -213,6 +229,7 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
         <div class="rule"></div>
         <div class="total"><span>COST</span><span>${money(source.cost || 0)}</span></div>
         ${tenders}
+        ${comp}
       </div>
       <div class="sign">${signature}<div class="sign-label">SELLER SIGNATURE</div></div>
     </div></body></html>`;

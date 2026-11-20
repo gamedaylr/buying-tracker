@@ -432,7 +432,7 @@ test('the thermal slip is one 4x6 label and keeps a long list on that label', ()
   expect(html).toContain('COST');
   expect(html).toContain('$7.00');
   expect(html).toContain('Store credit');
-  expect(html).not.toMatch(/\bcomp\b|% of/);
+  expect(html).toContain('50% of $10.00 comp');
   expect(receiptText(short)).not.toMatch(/\bcomp\b|%/i);
   expect(receiptHtml(short, { shopName: 'GameDay Sports Cards' })).not.toMatch(/\bcomp\b|% of|Cash offer|Store credit offer/i);
   expect(html).toContain('blob:sig');

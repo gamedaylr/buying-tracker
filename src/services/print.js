@@ -43,16 +43,16 @@ export function closePrintWindow(win) {
  * after a save, when the tab was opened on the original tap.
  * A direct Print tap should leave autoPrint off so print() runs in the tap.
  */
-export function printHtml(html, { preparedWindow, autoPrint = false } = {}) {
-  const doc = printableDocument(html, { autoPrint });
+export function printHtml(html, { preparedWindow, autoPrint = false, trackLabel = false } = {}) {
+  const doc = printableDocument(html, { autoPrint, trackLabel });
   const win = preparedWindow && !preparedWindow.closed ? preparedWindow : openBlank();
-  if (!win) return false;
+  if (!win) return null;
   try {
     win.document.open();
     win.document.write(doc);
     win.document.close();
   } catch (ignore) {
-    return false;
+    return null;
   }
   if (!autoPrint) {
     try {
@@ -62,7 +62,46 @@ export function printHtml(html, { preparedWindow, autoPrint = false } = {}) {
       // The page still has its own Print button.
     }
   }
-  return true;
+  return win;
+}
+
+/** Follow a label window so the desk can say when the print was skipped or cancelled. */
+export function watchLabelPrint(win, onStatus) {
+  if (!win) {
+    onStatus('blocked');
+    return () => {};
+  }
+  let sawDialog = false;
+  let settled = false;
+  function finish(status) {
+    if (settled) return;
+    if (status === 'dialog-opened') {
+      sawDialog = true;
+      onStatus('dialog');
+      return;
+    }
+    settled = true;
+    window.removeEventListener('message', onMessage);
+    clearInterval(timer);
+    if (status === 'dialog-closed' || sawDialog) onStatus('check');
+    else onStatus('cancelled');
+  }
+  function onMessage(event) {
+    const data = event.data;
+    if (!data || data.source !== 'gameday-label') return;
+    if (data.result === 'dialog-opened') finish('dialog-opened');
+    else if (data.result === 'dialog-closed') finish('dialog-closed');
+    else if (data.result === 'skipped') finish('skipped');
+  }
+  window.addEventListener('message', onMessage);
+  const timer = setInterval(() => {
+    if (win.closed) finish('window-closed');
+  }, 400);
+  return () => {
+    settled = true;
+    window.removeEventListener('message', onMessage);
+    clearInterval(timer);
+  };
 }
 
 export function absoluteAsset(url) {
