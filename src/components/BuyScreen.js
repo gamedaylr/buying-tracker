@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import logo from '../gameday-logo.png';
 import { useAuth } from '../auth/AuthProvider';
 import { parseAamva } from '../lib/aamva';
@@ -6,6 +6,9 @@ import {
   PAYMENT_METHODS,
   INVENTORY_STATUSES,
   approvalDecision,
+  applyCompInput,
+  applyCostInput,
+  applyPercentInput,
   computeOffers,
   emptyForm,
   findSellers,
@@ -15,11 +18,10 @@ import {
   mailtoHref,
   money,
   num,
-  paymentsTotal,
-  priceFromPercent,
   priorCashForSeller,
   receiptText,
   smsHref,
+  tenderGap,
   validateBuy,
 } from '../lib/buying';
 import { GRADERS, interpretScan, officialLookup } from '../lib/graders';
@@ -27,7 +29,7 @@ import { plainError } from '../lib/errors';
 import { lookupCert } from '../services/api';
 import { approveWithManagerLogin } from '../services/accounts';
 import { savePurchase } from '../services/purchases';
-import { absoluteAsset, copyText, printHtml } from '../services/print';
+import { absoluteAsset, closePrintWindow, copyText, preparePrintWindow, printHtml } from '../services/print';
 import { receiptHtml, slipHtml } from '../lib/printHtml';
 import PhotoPicker from './PhotoPicker';
 import Scanner from './Scanner';
@@ -64,6 +66,9 @@ export default function BuyScreen({ onManage }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [printNote, setPrintNote] = useState('');
+  const [tendersFollow, setTendersFollow] = useState(true);
+  const savingRef = useRef(false);
   const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
   const [approving, setApproving] = useState(false);
@@ -97,6 +102,7 @@ export default function BuyScreen({ onManage }) {
   function chooseOffer(type) {
     const amount = type === 'store_credit' ? offers.creditOffer : offers.cashOffer;
     const percent = type === 'store_credit' ? offers.creditPercent : offers.cashPercent;
+    setTendersFollow(true);
     setForm((prev) => ({
       ...prev,
       payoutType: type,
@@ -113,15 +119,21 @@ export default function BuyScreen({ onManage }) {
     }));
   }
 
+  function onComp(value) {
+    setForm((prev) => applyCompInput(prev, value));
+  }
+
+  function onCost(value) {
+    setForm((prev) => applyCostInput(prev, value, { tendersFollowCost: tendersFollow }));
+  }
+
   function onPercent(value) {
-    const cost = form.lotComp !== '' ? String(priceFromPercent(form.lotComp, value)) : form.cost;
-    setForm((prev) => ({
-      ...prev,
-      percentageBought: value,
-      cost,
-      cash: prev.payoutType === 'store_credit' ? prev.cash : cost,
-      storeCredit: prev.payoutType === 'store_credit' ? cost : prev.storeCredit,
-    }));
+    setForm((prev) => applyPercentInput(prev, value, { tendersFollowCost: tendersFollow }));
+  }
+
+  function onTender(key, value) {
+    setTendersFollow(false);
+    setField(key, value);
   }
 
   function selectSeller(next) {
@@ -208,6 +220,7 @@ export default function BuyScreen({ onManage }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (savingRef.current || result) return;
     const problem = validateBuy({
       form,
       settings,
@@ -219,8 +232,15 @@ export default function BuyScreen({ onManage }) {
       setError(problem);
       return;
     }
+    if (!tenderGap(form).matches) {
+      setError('Payment boxes have to add up to the cost paid.');
+      return;
+    }
+    const printWindow = preparePrintWindow();
+    savingRef.current = true;
     setSaving(true);
     setError('');
+    setPrintNote('');
     try {
       const saved = await savePurchase({
         form,
@@ -237,16 +257,26 @@ export default function BuyScreen({ onManage }) {
       });
       setResult(saved);
       setIdentity(null);
-      printSlip(saved.purchase);
+      const printed = printHtml(
+        slipHtml(saved.purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }),
+        { preparedWindow: printWindow, autoPrint: true },
+      );
+      if (!printed) {
+        closePrintWindow(printWindow);
+        setPrintNote('The slip is saved. Tap Print slip to open the printer.');
+      }
     } catch (err) {
+      closePrintWindow(printWindow);
       setError(plainError(err));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   function printSlip(purchase) {
-    printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+    const opened = printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+    if (!opened) setPrintNote('The browser blocked the print window. Allow pop-ups for this site, then tap Print slip again.');
   }
 
   function printReceipt(purchase) {
@@ -288,9 +318,21 @@ export default function BuyScreen({ onManage }) {
     setIdentity(null);
     setResult(null);
     setError('');
+    setPrintNote('');
+    setTendersFollow(true);
+    savingRef.current = false;
   }
 
-  const paymentGap = Math.abs(paymentsTotal(form) - num(form.cost));
+  useEffect(() => {
+    if (!result) return undefined;
+    const node = document.querySelector('[data-testid="saved-buy"]');
+    if (node && node.scrollIntoView) node.scrollIntoView({ block: 'start' });
+    return undefined;
+  }, [result]);
+
+  const gap = tenderGap(form);
+  const locked = Boolean(result);
+  const tenderName = form.payoutType === 'store_credit' ? 'Store credit' : 'Cash';
 
   return (
     <div className="app" data-testid="buy-screen">
@@ -315,6 +357,7 @@ export default function BuyScreen({ onManage }) {
               <p className="banner warn">A manager still needs to approve this buy. It is saved as pending.</p>
             ) : null}
             {result.identityWarning ? <p className="banner warn">{result.identityWarning}</p> : null}
+            {printNote ? <p className="banner warn">{printNote}</p> : null}
             <div className="row-actions">
               <button type="button" className="btn btn-primary" onClick={() => printSlip(result.purchase)}>Print slip</button>
               <button type="button" className="btn btn-ghost" onClick={() => printReceipt(result.purchase)}>Print / save PDF</button>
@@ -343,6 +386,7 @@ export default function BuyScreen({ onManage }) {
         ) : null}
 
         <form className="card stack" onSubmit={submit}>
+          <fieldset className="buy-lock stack" disabled={saving || locked}>
           <h1>Log a buy</h1>
           <div className="grid-2">
             <label>Date
@@ -411,7 +455,7 @@ export default function BuyScreen({ onManage }) {
           <fieldset className="stack">
             <legend>Offer</legend>
             <label>Lot comp
-              <input type="number" min="0" step="0.01" inputMode="decimal" value={form.lotComp} onChange={(event) => setField('lotComp', event.target.value)} />
+              <input type="number" min="0" step="0.01" inputMode="decimal" value={form.lotComp} onChange={(event) => onComp(event.target.value)} />
             </label>
             <div className="offer-row">
               <button type="button" className={form.payoutType === 'cash' ? 'offer selected' : 'offer'} onClick={() => chooseOffer('cash')}>
@@ -427,12 +471,13 @@ export default function BuyScreen({ onManage }) {
             </div>
             <div className="grid-2">
               <label>Percent of comp
-                <input type="number" min="0" step="0.1" value={form.percentageBought} onChange={(event) => onPercent(event.target.value)} />
+                <input type="number" min="0" step="0.1" inputMode="decimal" value={form.percentageBought} onChange={(event) => onPercent(event.target.value)} />
               </label>
               <label>Cost paid
-                <input type="number" min="0" step="0.01" inputMode="decimal" value={form.cost} onChange={(event) => setField('cost', event.target.value)} required />
+                <input type="number" min="0" step="0.01" inputMode="decimal" value={form.cost} onChange={(event) => onCost(event.target.value)} required />
               </label>
             </div>
+            <p className="hint">Percent of comp updates from the cost paid divided by the comp.</p>
             {decision.needed ? (
               <p className="banner warn">{decision.reasons.join(' ')} You can save it, and a manager approves it here or from the manager desk.</p>
             ) : null}
@@ -443,13 +488,19 @@ export default function BuyScreen({ onManage }) {
             <div className="pay-grid">
               {PAYMENT_METHODS.map((method) => (
                 <label key={method.key}>{method.label}
-                  <input type="number" min="0" step="0.01" inputMode="decimal" value={form[method.key]} onChange={(event) => setField(method.key, event.target.value)} />
+                  <input type="number" min="0" step="0.01" inputMode="decimal" value={form[method.key]} onChange={(event) => onTender(method.key, event.target.value)} />
                 </label>
               ))}
             </div>
-            {form.cost !== '' && paymentGap > 0.009 ? (
-              <p className="hint">Payment lines add up to {money(paymentsTotal(form))}. The cost is {money(form.cost)}.</p>
-            ) : null}
+            {!gap.matches ? (
+              <p className="banner warn" role="alert">
+                Payment boxes add up to {money(gap.paid)}. Cost paid is {money(gap.cost)}. Change the boxes so they match the cost.
+              </p>
+            ) : tendersFollow ? (
+              <p className="hint">{tenderName} is filled in from the cost paid. Change the boxes only if you split the payment.</p>
+            ) : (
+              <p className="hint">Payment boxes match the cost paid.</p>
+            )}
           </fieldset>
 
           {alert8300.over ? (
@@ -542,9 +593,15 @@ export default function BuyScreen({ onManage }) {
           </fieldset>
 
           {error ? <p className="banner warn">{error}</p> : null}
-          <button className="btn btn-primary btn-save" type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Save and print slip'}
+          {!gap.matches ? (
+            <p className="banner warn" role="alert">
+              Payment boxes add up to {money(gap.paid)}. Cost paid is {money(gap.cost)}. They need to match before you save.
+            </p>
+          ) : null}
+          <button className="btn btn-primary btn-save" type="submit" disabled={saving || locked || !gap.matches}>
+            {saving ? 'Saving…' : locked ? 'Saved' : 'Save and print slip'}
           </button>
+          </fieldset>
         </form>
       </main>
       {scanner ? (

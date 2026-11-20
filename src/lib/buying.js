@@ -287,6 +287,72 @@ export function paymentsTotal(form) {
   return roundMoney(PAYMENT_METHODS.reduce((sum, method) => sum + num(form[method.key]), 0));
 }
 
+export function formatPercent(value) {
+  const n = roundMoney(value);
+  if (!Number.isFinite(n)) return '';
+  return n.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+/** Percent of comp from the amount paid. Blank when either side is blank or comp is zero. */
+export function percentText(cost, comp) {
+  if (cost === '' || cost == null || comp === '' || comp == null) return '';
+  const pct = agreedPercent(cost, comp);
+  if (pct == null) return '';
+  return formatPercent(pct);
+}
+
+export function defaultTenderKey(form) {
+  return form && form.payoutType === 'store_credit' ? 'storeCredit' : 'cash';
+}
+
+export function applyCompInput(form, lotComp) {
+  return {
+    ...form,
+    lotComp,
+    percentageBought: percentText(form.cost, lotComp),
+  };
+}
+
+/**
+ * Cost paid is the deal. Until the payment boxes are edited by hand, the
+ * single tender (cash, or store credit when that offer was chosen) mirrors it.
+ */
+export function applyCostInput(form, cost, { tendersFollowCost = false } = {}) {
+  const next = {
+    ...form,
+    cost,
+    percentageBought: percentText(cost, form.lotComp),
+  };
+  if (tendersFollowCost) {
+    const key = defaultTenderKey(form);
+    PAYMENT_METHODS.forEach((method) => {
+      next[method.key] = method.key === key ? cost : '';
+    });
+  }
+  return next;
+}
+
+export function applyPercentInput(form, percentageBought, { tendersFollowCost = false } = {}) {
+  const cost = form.lotComp !== '' && form.lotComp != null && percentageBought !== ''
+    ? String(priceFromPercent(form.lotComp, percentageBought))
+    : form.cost;
+  const next = applyCostInput(form, cost, { tendersFollowCost });
+  next.percentageBought = percentageBought;
+  return next;
+}
+
+export function tenderGap(form) {
+  const costBlank = form.cost === '' || form.cost == null;
+  const paid = paymentsTotal(form);
+  const cost = roundMoney(form.cost);
+  return {
+    paid,
+    cost,
+    costBlank,
+    matches: costBlank || Math.abs(paid - cost) < 0.009,
+  };
+}
+
 function cleanLineItems(lineItems) {
   const map = {};
   (lineItems || []).forEach((item, index) => {
@@ -601,40 +667,92 @@ export function matchesSearch(purchase, filters) {
   return true;
 }
 
+export function sumPurchases(list) {
+  const rows = list || [];
+  const totals = {
+    slips: rows.length,
+    cost: 0,
+    cards: 0,
+    pending: 0,
+    cashDrawer: 0,
+  };
+  PAYMENT_METHODS.forEach((method) => {
+    totals[method.key] = 0;
+  });
+  rows.forEach((purchase) => {
+    totals.cost += num(purchase.cost);
+    totals.cards += num(purchase.numCards);
+    if (purchase.approvalStatus === 'pending' || purchase.needsReview) totals.pending += 1;
+    PAYMENT_METHODS.forEach((method) => {
+      totals[method.key] += num(purchase[method.key]);
+    });
+  });
+  totals.cost = roundMoney(totals.cost);
+  totals.cashDrawer = roundMoney(totals.cash + totals.cashFromSafe);
+  PAYMENT_METHODS.forEach((method) => {
+    totals[method.key] = roundMoney(totals[method.key]);
+  });
+  return totals;
+}
+
 export function summarize(purchases, { day, weekStart, monthStart }) {
   const active = (purchases || []).filter((purchase) => !purchase.deleted);
-  const sum = (list) => {
-    const totals = {
-      slips: list.length,
-      cost: 0,
-      cards: 0,
-      pending: 0,
-      cashDrawer: 0,
-    };
-    PAYMENT_METHODS.forEach((method) => {
-      totals[method.key] = 0;
-    });
-    list.forEach((purchase) => {
-      totals.cost += num(purchase.cost);
-      totals.cards += num(purchase.numCards);
-      if (purchase.approvalStatus === 'pending' || purchase.needsReview) totals.pending += 1;
-      PAYMENT_METHODS.forEach((method) => {
-        totals[method.key] += num(purchase[method.key]);
-      });
-    });
-    totals.cost = roundMoney(totals.cost);
-    totals.cashDrawer = roundMoney(totals.cash + totals.cashFromSafe);
-    PAYMENT_METHODS.forEach((method) => {
-      totals[method.key] = roundMoney(totals[method.key]);
-    });
-    return totals;
-  };
   return {
-    day: sum(active.filter((purchase) => purchase.date === day)),
-    week: sum(active.filter((purchase) => purchase.date >= weekStart && purchase.date <= day)),
-    month: sum(active.filter((purchase) => purchase.date >= monthStart && purchase.date <= day)),
-    all: sum(active),
+    day: sumPurchases(active.filter((purchase) => purchase.date === day)),
+    week: sumPurchases(active.filter((purchase) => purchase.date >= weekStart && purchase.date <= day)),
+    month: sumPurchases(active.filter((purchase) => purchase.date >= monthStart && purchase.date <= day)),
+    all: sumPurchases(active),
   };
+}
+
+/**
+ * Newest slip first. Slip number is the shop's sequence, so a higher number
+ * is a later buy even when an older row has no timestamp. Ties use the time
+ * the buy was logged, then the date on the slip.
+ */
+export function comparePurchasesNewestFirst(a, b) {
+  const byNumber = num(b.purchaseNumber) - num(a.purchaseNumber);
+  if (byNumber) return byNumber;
+  const byTime = String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+  if (byTime) return byTime;
+  const byDate = String(b.date || '').localeCompare(String(a.date || ''));
+  if (byDate) return byDate;
+  return String(b.firebaseKey || b.id || '').localeCompare(String(a.firebaseKey || a.id || ''));
+}
+
+export function sortPurchasesNewestFirst(purchases) {
+  return [...(purchases || [])].sort(comparePurchasesNewestFirst);
+}
+
+export function purchaseInRange(purchase, { from, to, includeDeleted } = {}) {
+  if (!purchase) return false;
+  if (!includeDeleted && purchase.deleted) return false;
+  const date = String(purchase.date || '');
+  if (from && date < from) return false;
+  if (to && date > to) return false;
+  return true;
+}
+
+export function tenderBreakdown(purchases, range) {
+  const list = (purchases || []).filter((purchase) => purchaseInRange(purchase, range || {}));
+  return PAYMENT_METHODS.map((method) => {
+    const buys = list.filter((purchase) => num(purchase[method.key]) > 0);
+    const total = roundMoney(buys.reduce((sum, purchase) => sum + num(purchase[method.key]), 0));
+    return {
+      key: method.key,
+      label: method.label,
+      total,
+      count: buys.length,
+    };
+  });
+}
+
+export function purchasesForTender(purchases, range, methodKey) {
+  return sortPurchasesNewestFirst(
+    (purchases || []).filter((purchase) => (
+      purchaseInRange(purchase, range || {}) && num(purchase[methodKey]) > 0
+    )),
+  );
 }
 
 export function cashAlerts(purchases) {
@@ -836,12 +954,13 @@ export function changedFields(before, after) {
 
 export function sellerHistory(purchases, seller) {
   if (!seller) return [];
-  return (purchases || []).filter((purchase) => {
+  const rows = (purchases || []).filter((purchase) => {
     if (purchase.deleted) return false;
     if (seller.id && purchase.sellerId === seller.id) return true;
     const name = String(seller.name || '').trim().toLowerCase();
     return name && String(purchase.boughtFrom || '').trim().toLowerCase() === name;
   });
+  return sortPurchasesNewestFirst(rows);
 }
 
 export function statusLabel(value) {

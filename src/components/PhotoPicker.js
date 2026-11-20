@@ -44,7 +44,7 @@ export default function PhotoPicker({ label, hint, files, onChange, multiple, li
           {files.map((file) => (
             <figure key={file.id}>
               <img src={file.url} alt="" />
-              <button type="button" onClick={() => remove(file.id)}>Remove</button>
+              <button type="button" className="btn btn-ghost thumb-remove" onClick={() => remove(file.id)}>Remove</button>
             </figure>
           ))}
         </div>

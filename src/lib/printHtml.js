@@ -8,6 +8,48 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+const SCREEN_TABLE_CSS = `
+  @media (max-width: 700px) {
+    table, thead, tbody, th, td, tr { display: block; width: 100%; }
+    thead { display: none; }
+    tr { border: 1px solid #ccc; border-radius: 10px; margin: 0 0 10px; padding: 8px; }
+    td { border: 0; padding: 4px 0; }
+    td::before { content: attr(data-label); font-weight: 700; display: block; font-size: 12px; color: #444; }
+  }
+  @media print {
+    table { display: table !important; width: 100%; border-collapse: collapse; }
+    thead { display: table-header-group !important; }
+    tbody { display: table-row-group !important; }
+    tr { display: table-row !important; border: 0; margin: 0; padding: 0; }
+    th, td { display: table-cell !important; }
+    td::before { content: none !important; }
+  }
+`;
+
+const PRINT_CHROME = `
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  .print-bar { font-family: Arial, sans-serif; padding: 12px; text-align: center; }
+  .print-bar button { font-size: 16px; min-height: 44px; padding: 8px 18px; }
+  @media print { .print-bar { display: none !important; } }
+</style>`;
+
+/** Adds a Print button, and optionally prints when the page finishes loading. */
+export function printableDocument(html, { autoPrint = false } = {}) {
+  const script = autoPrint
+    ? '<script>window.addEventListener("load",function(){try{window.focus();window.print();}catch(e){}});window.addEventListener("afterprint",function(){window.close();});</script>'
+    : '';
+  const bar = '<div class="print-bar"><button type="button" onclick="window.print()">Print</button></div>';
+  let next = String(html || '');
+  if (next.includes('</head>')) next = next.replace('</head>', `${PRINT_CHROME}</head>`);
+  else next = `${PRINT_CHROME}${next}`;
+  if (next.includes('<body>')) next = next.replace('<body>', `<body>${bar}`);
+  else next = `${bar}${next}`;
+  if (next.includes('</body>')) next = next.replace('</body>', `${script}</body>`);
+  else next = `${next}${script}`;
+  return next;
+}
+
 export function slipHtml(purchase, { logoUrl, shopName } = {}) {
   const date = formatDisplayDate(purchase.date);
   const lines = paymentLines(purchase).map((line) => (
@@ -21,7 +63,7 @@ export function slipHtml(purchase, { logoUrl, shopName } = {}) {
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; font-family: Arial, sans-serif; }
-      .slip { width: 4in; min-height: 6in; padding: 0.18in; }
+      .slip { width: 100%; max-width: 4in; min-height: 6in; padding: 0.18in; }
       h1 { font-size: 16px; margin: 0 0 4px; }
       img { height: 36px; }
       .muted { color: #444; font-size: 11px; }
@@ -53,7 +95,7 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
     const flag = item.verificationStatus && item.verificationStatus !== 'unchecked'
       ? item.verificationStatus.replace('_', ' ')
       : '';
-    return `<tr><td>${escapeHtml(item.description || 'Item')}</td><td>${cert}</td><td>${escapeHtml(official)}</td><td>${escapeHtml(flag)}</td></tr>`;
+    return `<tr><td data-label="Item">${escapeHtml(item.description || 'Item')}</td><td data-label="Cert">${cert}</td><td data-label="Lookup">${escapeHtml(official)}</td><td data-label="Check">${escapeHtml(flag)}</td></tr>`;
   }).join('');
   const payments = paymentLines(purchase).map((line) => (
     `<li>${escapeHtml(line.label)}: ${money(line.amount)}</li>`
@@ -66,6 +108,7 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
       h1 { font-family: Arial, sans-serif; font-size: 20px; margin: 0; letter-spacing: 0.04em; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; font-family: Arial, sans-serif; font-size: 13px; }
       td, th { border-bottom: 1px solid #ccc; text-align: left; padding: 6px 4px; vertical-align: top; }
+      ${SCREEN_TABLE_CSS}
       .meta { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; }
       .total { font-size: 22px; font-weight: 700; }
       .sig { margin-top: 16px; }
@@ -103,10 +146,10 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
 
 export function sellerReportHtml(seller, purchases, { shopName } = {}) {
   const rows = (purchases || []).map((purchase) => (
-    `<tr><td>${escapeHtml(formatDisplayDate(purchase.date))}</td><td>#${escapeHtml(purchase.purchaseNumber)}</td><td>${money(purchase.cost)}</td><td>${escapeHtml(paymentSummary(purchase))}</td><td>${escapeHtml(statusLabel(purchase.inventoryStatus))}</td><td>${escapeHtml(purchase.buyerName || '')}</td></tr>`
+    `<tr><td data-label="Date">${escapeHtml(formatDisplayDate(purchase.date))}</td><td data-label="Slip">#${escapeHtml(purchase.purchaseNumber)}</td><td data-label="Cost">${money(purchase.cost)}</td><td data-label="Payout">${escapeHtml(paymentSummary(purchase))}</td><td data-label="Status">${escapeHtml(statusLabel(purchase.inventoryStatus))}</td><td data-label="Buyer">${escapeHtml(purchase.buyerName || '')}</td></tr>`
   )).join('');
   return `<!DOCTYPE html><html><head><title>${escapeHtml(seller.name || 'Seller')}</title>
-    <style>body{font-family:Arial,sans-serif;margin:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ccc;text-align:left;padding:6px}</style>
+    <style>body{font-family:Arial,sans-serif;margin:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ccc;text-align:left;padding:6px}${SCREEN_TABLE_CSS}</style>
     </head><body><h1>${escapeHtml(shopName || 'Shop')}</h1><h2>${escapeHtml(seller.name || '')}</h2>
     <p>${escapeHtml(seller.phone || '')} ${escapeHtml(seller.email || '')}</p>
     <table><thead><tr><th>Date</th><th>Slip</th><th>Cost</th><th>Payout</th><th>Status</th><th>Buyer</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
