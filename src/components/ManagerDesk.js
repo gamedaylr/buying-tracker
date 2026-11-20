@@ -1,0 +1,564 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { get, onValue, ref, update } from 'firebase/database';
+import logo from '../gameday-logo.png';
+import { db } from '../firebase';
+import { useAuth } from '../auth/AuthProvider';
+import {
+  INVENTORY_STATUSES,
+  PAYMENT_METHODS,
+  cashAlerts,
+  complianceRows,
+  complianceToCsv,
+  formFromPurchase,
+  normalizeSettings,
+  formatDisplayDate,
+  lineItemsOf,
+  matchesSearch,
+  money,
+  purchasesToCsv,
+  sellerHistory,
+  startOfMonthISO,
+  startOfWeekISO,
+  statusLabel,
+  summarize,
+  todayISO,
+} from '../lib/buying';
+import { plainError } from '../lib/errors';
+import { receiptHtml, sellerReportHtml, slipHtml } from '../lib/printHtml';
+import { createShopUser, setUserDisabled } from '../services/accounts';
+import { decryptIdentity } from '../services/api';
+import { downloadUrl } from '../services/photos';
+import { absoluteAsset, downloadText, printHtml } from '../services/print';
+import { rowsFromSnapshot, saveManagerEdit, setPurchaseDeleted } from '../services/purchases';
+
+const TABS = [
+  ['buys', 'Buys'],
+  ['summary', 'Summary'],
+  ['sellers', 'Sellers'],
+  ['people', 'People'],
+  ['settings', 'Settings'],
+  ['activity', 'Activity'],
+  ['compliance', 'Compliance'],
+];
+
+function useCollection(path) {
+  const [rows, setRows] = useState([]);
+  const [error, setError] = useState('');
+  useEffect(() => onValue(ref(db, path), (snapshot) => {
+    setRows(rowsFromSnapshot(snapshot));
+    setError('');
+  }, (err) => setError(plainError(err))), [path]);
+  return { rows, error };
+}
+
+function PhotoStrip({ photos, label, reveal }) {
+  const [open, setOpen] = useState(!reveal);
+  const list = Array.isArray(photos) ? photos : Object.entries(photos || {}).map(([id, photo]) => ({ id, ...photo }));
+  if (!list.length) return null;
+  return (
+    <div>
+      <h3>{label}</h3>
+      {reveal && !open ? <button type="button" className="btn btn-ghost" onClick={() => setOpen(true)}>Show {label.toLowerCase()}</button> : (
+        <div className="thumbs">
+          {list.map((photo) => <StoredImage key={photo.storagePath || photo.id} path={photo.storagePath} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StoredImage({ path }) {
+  const [url, setUrl] = useState('');
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    downloadUrl(path).then((next) => { if (live) setUrl(next); }).catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [path]);
+  if (failed) return <p className="hint">This photo is unavailable.</p>;
+  if (!url) return <p className="hint">Loading photo…</p>;
+  return <a href={url} target="_blank" rel="noreferrer"><img className="thumb-inline" src={url} alt="" /></a>;
+}
+
+function PurchaseEditor({ purchase, onClose, profile, settings }) {
+  const [form, setForm] = useState(() => formFromPurchase(purchase));
+  const [items, setItems] = useState(() => lineItemsOf(purchase));
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await saveManagerEdit(purchase, form, items, profile, settings);
+      onClose();
+    } catch (err) {
+      setError(plainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={save}>
+      <div className="grid-2">
+        <label>Date<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
+        <label>Seller<input value={form.boughtFrom} onChange={(event) => setForm({ ...form, boughtFrom: event.target.value })} /></label>
+        <label>Buyer<input value={form.buyerName} onChange={(event) => setForm({ ...form, buyerName: event.target.value })} /></label>
+        <label>Cost<input type="number" step="0.01" value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} /></label>
+      </div>
+      <div className="pay-grid">
+        {PAYMENT_METHODS.map((method) => (
+          <label key={method.key}>{method.label}
+            <input type="number" step="0.01" value={form[method.key]} onChange={(event) => setForm({ ...form, [method.key]: event.target.value })} />
+          </label>
+        ))}
+      </div>
+      <label>Status
+        <select value={form.inventoryStatus} onChange={(event) => setForm({ ...form, inventoryStatus: event.target.value })}>
+          {INVENTORY_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+        </select>
+      </label>
+      <label>Hold days<input type="number" min="0" value={form.holdDays} onChange={(event) => setForm({ ...form, holdDays: event.target.value })} /></label>
+      <label>Notes<textarea rows="2" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
+      {items.map((item) => (
+        <div className="grid-2" key={item.id}>
+          <label>Slab<input value={item.description || ''} onChange={(event) => setItems(items.map((row) => row.id === item.id ? { ...row, description: event.target.value } : row))} /></label>
+          <label>Cert<input value={item.certNumber || ''} onChange={(event) => setItems(items.map((row) => row.id === item.id ? { ...row, certNumber: event.target.value } : row))} /></label>
+        </div>
+      ))}
+      {error ? <p className="banner warn">{error}</p> : null}
+      <div className="row-actions">
+        <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+        <button className="btn btn-ghost" type="button" onClick={onClose}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function useDeskTab() {
+  const [hash, setHash] = useState(window.location.hash || '#/manage/buys');
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash || '#/manage/buys');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return hash.split('/')[2] || 'buys';
+}
+
+export default function ManagerDesk() {
+  const { firebaseUser, profile, settings, signOutShop } = useAuth();
+  const tab = useDeskTab();
+  const purchases = useCollection('purchases');
+  const users = useCollection('users');
+  const activity = useCollection('audit');
+  const sellers = useCollection('sellers');
+  const [filters, setFilters] = useState({
+    dateFrom: '', dateTo: '', seller: '', buyer: '', amount: '', paymentMethod: 'any', text: '', status: 'any', pendingOnly: false, includeDeleted: false,
+  });
+  const [visible, setVisible] = useState(40);
+  const [openId, setOpenId] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState('');
+
+  const filtered = useMemo(
+    () => purchases.rows.filter((purchase) => matchesSearch(purchase, filters)),
+    [purchases.rows, filters],
+  );
+  const open = purchases.rows.find((purchase) => purchase.firebaseKey === openId);
+
+  function printSlip(purchase) {
+    printHtml(slipHtml(purchase, { logoUrl: absoluteAsset(logo), shopName: settings.shopName }));
+  }
+  async function printReceipt(purchase) {
+    let signatureUrl = '';
+    const path = purchase.photos && purchase.photos.signature && purchase.photos.signature.storagePath;
+    if (path) signatureUrl = await downloadUrl(path).catch(() => '');
+    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl, shopName: settings.shopName }));
+  }
+
+  return (
+    <div className="app" data-testid="manager-desk">
+      <header className="topbar">
+        <img src={logo} alt="" className="logo" />
+        <div>
+          <strong>{settings.shopName}</strong>
+          <span>Manager desk</span>
+        </div>
+        <div className="top-actions">
+          <a className="btn btn-ghost" href="#/buy">Buying desk</a>
+          <button type="button" className="btn btn-ghost" onClick={signOutShop}>Sign out</button>
+        </div>
+      </header>
+      <nav className="tabs">
+        {TABS.map(([id, label]) => (
+          <a key={id} className={tab === id ? 'tab active' : 'tab'} href={`#/manage/${id}`}>{label}</a>
+        ))}
+      </nav>
+      <main className="wrap">
+        {error || purchases.error ? <p className="banner warn">{error || purchases.error}</p> : null}
+        {tab === 'summary' && <SummaryPanel purchases={purchases.rows} />}
+        {tab === 'sellers' && (
+          <SellersPanel
+            sellers={sellers.rows}
+            purchases={purchases.rows}
+            settings={settings}
+            firebaseUser={firebaseUser}
+          />
+        )}
+        {tab === 'people' && <PeoplePanel users={users.rows} profile={profile} settings={settings} />}
+        {tab === 'settings' && <SettingsPanel settings={settings} />}
+        {tab === 'activity' && <ActivityPanel rows={activity.rows} />}
+        {tab === 'compliance' && (
+          <CompliancePanel purchases={purchases.rows} firebaseUser={firebaseUser} settings={settings} />
+        )}
+        {tab === 'buys' && (
+          <section className="stack">
+            <div className="card filters">
+              <div className="grid-2">
+                <label>From<input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} /></label>
+                <label>To<input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} /></label>
+                <label>Seller<input value={filters.seller} onChange={(event) => setFilters({ ...filters, seller: event.target.value })} /></label>
+                <label>Buyer or staff<input value={filters.buyer} onChange={(event) => setFilters({ ...filters, buyer: event.target.value })} /></label>
+                <label>Amount<input value={filters.amount} onChange={(event) => setFilters({ ...filters, amount: event.target.value })} inputMode="decimal" /></label>
+                <label>Payment
+                  <select value={filters.paymentMethod} onChange={(event) => setFilters({ ...filters, paymentMethod: event.target.value })}>
+                    <option value="any">Any</option>
+                    {PAYMENT_METHODS.map((method) => <option key={method.key} value={method.key}>{method.label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label>Search text
+                <input value={filters.text} onChange={(event) => setFilters({ ...filters, text: event.target.value })} placeholder="Cert, notes, phone, card name" />
+              </label>
+              <div className="row-actions">
+                <label className="check"><input type="checkbox" checked={filters.pendingOnly} onChange={(event) => setFilters({ ...filters, pendingOnly: event.target.checked })} /> Needs a manager</label>
+                <label className="check"><input type="checkbox" checked={filters.includeDeleted} onChange={(event) => setFilters({ ...filters, includeDeleted: event.target.checked })} /> Show removed</label>
+                <button type="button" className="btn btn-ghost" onClick={() => setFilters({ ...filters, dateFrom: todayISO(), dateTo: todayISO() })}>Today</button>
+                <button type="button" className="btn btn-ghost" onClick={() => downloadText(`${settings.shopShortName}-buys-${todayISO()}.csv`, purchasesToCsv(filtered))}>Download these buys</button>
+              </div>
+              <label>Status
+                <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+                  <option value="any">Any</option>
+                  <option value="untracked">Not tracked</option>
+                  {INVENTORY_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="hint">{filtered.length} buys</p>
+            {filtered.slice(0, visible).map((purchase) => (
+              <article className="card tx" key={purchase.firebaseKey}>
+                <button type="button" className="tx-main" onClick={() => { setOpenId(purchase.firebaseKey === openId ? '' : purchase.firebaseKey); setEditing(false); }}>
+                  <strong>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)}</strong>
+                  <span>{purchase.boughtFrom || 'No seller'} · {money(purchase.cost)}</span>
+                  <span className="hint">{purchase.buyerName}{purchase.loggedByName ? ` · logged by ${purchase.loggedByName}` : ' · logged before sign-in'}</span>
+                  {purchase.approvalStatus === 'pending' ? <em>Pending approval</em> : null}
+                  {purchase.needsReview ? <em>Needs review</em> : null}
+                  {purchase.deleted ? <em>Removed</em> : null}
+                </button>
+                {openId === purchase.firebaseKey && open ? (
+                  <div className="stack">
+                    <p>{purchase.payoutType === 'store_credit' ? 'Took store credit' : 'Took cash'} · {statusLabel(purchase.inventoryStatus)}{purchase.holdUntil ? ` · do not sell until ${formatDisplayDate(purchase.holdUntil)}` : ''}</p>
+                    <p>{lineItemsOf(purchase).map((item) => `${item.description || 'Item'} ${item.grader || ''} ${item.certNumber || ''} ${item.verificationStatus || ''}`).join(' · ')}</p>
+                    {purchase.notes ? <p>{purchase.notes}</p> : null}
+                    <PhotoStrip label="Card photos" photos={(purchase.photos && purchase.photos.cards) || {}} />
+                    <PhotoStrip label="Payment proof" photos={(purchase.photos && purchase.photos.payment) || {}} />
+                    <PhotoStrip label="Seller ID" photos={(purchase.photos && purchase.photos.id) || {}} reveal />
+                    <div className="row-actions">
+                      <button type="button" className="btn btn-ghost" onClick={() => printSlip(purchase)}>Print slip</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => printReceipt(purchase)}>Print / PDF</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setEditing((value) => !value)}>{editing ? 'Close edit' : 'Edit'}</button>
+                      <button type="button" className="btn btn-ghost" onClick={async () => {
+                        if (!purchase.deleted && !window.confirm(`Remove slip #${purchase.purchaseNumber}? A manager can restore it.`)) return;
+                        try {
+                          await setPurchaseDeleted(purchase, profile, settings, !purchase.deleted);
+                        } catch (err) {
+                          setError(plainError(err));
+                        }
+                      }}>{purchase.deleted ? 'Restore' : 'Remove'}</button>
+                    </div>
+                    {editing ? <PurchaseEditor purchase={purchase} profile={profile} settings={settings} onClose={() => setEditing(false)} /> : null}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+            {visible < filtered.length ? <button type="button" className="btn btn-ghost" onClick={() => setVisible((count) => count + 40)}>Show more</button> : null}
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function SummaryPanel({ purchases }) {
+  const day = todayISO();
+  const totals = summarize(purchases, { day, weekStart: startOfWeekISO(), monthStart: startOfMonthISO() });
+  const blocks = [
+    ['Today', totals.day],
+    ['This week', totals.week],
+    ['This month', totals.month],
+    ['All time', totals.all],
+  ];
+  return (
+    <section className="stack">
+      {blocks.map(([label, block]) => (
+        <article className="card" key={label}>
+          <h2>{label}</h2>
+          <div className="stat-grid">
+            <div><span>Slips</span><strong>{block.slips}</strong></div>
+            <div><span>Total</span><strong>{money(block.cost)}</strong></div>
+            <div><span>Cash out</span><strong>{money(block.cashDrawer)}</strong></div>
+            <div><span>Store credit</span><strong>{money(block.storeCredit)}</strong></div>
+            <div><span>Cards</span><strong>{block.cards}</strong></div>
+            <div><span>Needs manager</span><strong>{block.pending}</strong></div>
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function PeoplePanel({ users, profile, settings }) {
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff' });
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await createShopUser({ ...form, shopId: settings.shopId });
+      setNotice(`${form.name} can sign in now.`);
+      setForm({ name: '', email: '', password: '', role: 'staff' });
+    } catch (err) {
+      setError(plainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="stack">
+      <form className="card stack" onSubmit={submit}>
+        <h2>Add a person</h2>
+        <label>Name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+        <label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
+        <label>Temporary password<input type="text" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={6} required /></label>
+        <label>Role
+          <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
+            <option value="staff">Staff — log buys only</option>
+            <option value="manager">Manager — desk, money, and IDs</option>
+          </select>
+        </label>
+        {error ? <p className="banner warn">{error}</p> : null}
+        {notice ? <p className="banner ok">{notice}</p> : null}
+        <button className="btn btn-primary" disabled={busy} type="submit">{busy ? 'Adding…' : 'Add login'}</button>
+      </form>
+      {users.map((user) => (
+        <article className="card row-spread" key={user.firebaseKey}>
+          <div>
+            <strong>{user.name}</strong>
+            <p className="hint">{user.email} · {user.role}{user.disabled ? ' · disabled' : ''}</p>
+          </div>
+          {user.firebaseKey !== profile.uid ? (
+            <button type="button" className="btn btn-ghost" onClick={() => setUserDisabled(user.firebaseKey, !user.disabled).catch((err) => setError(plainError(err)))}>
+              {user.disabled ? 'Enable' : 'Disable'}
+            </button>
+          ) : <span className="hint">This is you</span>}
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function SettingsPanel({ settings }) {
+  const [form, setForm] = useState(settings);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  useEffect(() => setForm(settings), [settings]);
+
+  async function save(event) {
+    event.preventDefault();
+    setError('');
+    setNotice('');
+    try {
+      const next = normalizeSettings({ ...form, shopId: settings.shopId });
+      await update(ref(db, 'settings'), next);
+      setNotice('Saved. Staff use these rates and rules on the next buy.');
+    } catch (err) {
+      setError(plainError(err));
+    }
+  }
+
+  function set(name, value) {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  return (
+    <form className="card stack" onSubmit={save}>
+      <h2>Shop settings</h2>
+      <label>Shop name<input value={form.shopName || ''} onChange={(event) => set('shopName', event.target.value)} /></label>
+      <label>Short name<input value={form.shopShortName || ''} onChange={(event) => set('shopShortName', event.target.value)} /></label>
+      <label>Tagline<input value={form.tagline || ''} onChange={(event) => set('tagline', event.target.value)} /></label>
+      <label>Accent color<input type="color" value={form.accentColor || '#ed1c24'} onChange={(event) => set('accentColor', event.target.value)} /></label>
+      <p className="hint">Shop id: {settings.shopId}. New buys keep this id so a later version could add another shop. It is not a login, and this site still runs one shop.</p>
+      <label className="check"><input type="checkbox" checked={form.idRequired !== false} onChange={(event) => set('idRequired', event.target.checked)} /> Require a seller ID photo</label>
+      <label>ID required at or above
+        <input type="number" min="0" step="0.01" value={form.idThreshold} onChange={(event) => set('idThreshold', event.target.value)} />
+      </label>
+      <p className="hint">Turn the switch off to stop requiring IDs. Otherwise staff cannot save a buy at or above this amount without an ID photo, unless that seller already has one on file.</p>
+      <div className="grid-2">
+        <label>Cash offer %<input type="number" min="0" max="100" step="0.1" value={form.cashPercent} onChange={(event) => set('cashPercent', event.target.value)} /></label>
+        <label>Store credit offer %<input type="number" min="0" max="100" step="0.1" value={form.creditPercent} onChange={(event) => set('creditPercent', event.target.value)} /></label>
+      </div>
+      <label>Manager must approve buys at or above
+        <input type="number" min="0" step="0.01" value={form.approvalAmount} onChange={(event) => set('approvalAmount', event.target.value)} />
+      </label>
+      <p className="hint">Use 0 if the dollar amount should not force approval. Offers above the cash or store-credit percent still need a manager.</p>
+      <label>Default hold, in days
+        <input type="number" min="0" max="365" value={form.holdDays} onChange={(event) => set('holdDays', event.target.value)} />
+      </label>
+      <p className="hint">0 means no hold. A hold reminds the shop not to sell those cards until the date on the buy.</p>
+      {error ? <p className="banner warn">{error}</p> : null}
+      {notice ? <p className="banner ok">{notice}</p> : null}
+      <button className="btn btn-primary" type="submit">Save settings</button>
+    </form>
+  );
+}
+
+function ActivityPanel({ rows }) {
+  const sorted = [...rows].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  return (
+    <section className="stack">
+      {sorted.slice(0, 200).map((row) => (
+        <article className="card" key={row.firebaseKey}>
+          <strong>{row.action} · slip #{row.purchaseNumber}</strong>
+          <p className="hint">{row.byName} · {row.at ? new Date(row.at).toLocaleString() : ''}</p>
+          <p>{row.summary}</p>
+        </article>
+      ))}
+      {sorted.length === 0 ? <p>No activity yet. New buys will show up here. Older buys from before sign-in do not have a log entry.</p> : null}
+    </section>
+  );
+}
+
+function SellersPanel({ sellers, purchases, settings, firebaseUser }) {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [privateInfo, setPrivateInfo] = useState(null);
+  const [error, setError] = useState('');
+  const matches = sellers.filter((seller) => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return false;
+    return `${seller.name || ''} ${seller.phone || ''}`.toLowerCase().includes(q);
+  }).slice(0, 12);
+  const history = selected ? sellerHistory(purchases, selected) : [];
+
+  async function showPrivate() {
+    setError('');
+    try {
+      const snap = await get(ref(db, `sellerPrivate/${selected.id}`));
+      const value = snap.val();
+      if (!value || !value.idCiphertext) {
+        setPrivateInfo({ note: 'No encrypted ID number is stored. The ID photo, if there is one, is on the buy.' });
+        return;
+      }
+      const token = await firebaseUser.getIdToken();
+      const response = await decryptIdentity(token, [{ id: selected.id, ciphertext: value.idCiphertext, iv: value.idIv }]);
+      setPrivateInfo((response.results && response.results[0] && response.results[0].payload) || { note: 'Could not read the ID number.' });
+    } catch (err) {
+      setError(plainError(err));
+    }
+  }
+
+  return (
+    <section className="stack">
+      <label>Find a seller
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name or phone" />
+      </label>
+      {matches.map((seller) => (
+        <button type="button" className="card tx-main" key={seller.id} onClick={() => { setSelected(seller); setPrivateInfo(null); }}>
+          <strong>{seller.name}</strong>
+          <span className="hint">{seller.phone} {seller.hasIdPhoto ? '· ID on file' : ''}</span>
+        </button>
+      ))}
+      {selected ? (
+        <article className="card stack">
+          <h2>{selected.name}</h2>
+          <p>{history.length} buys · {money(history.reduce((sum, purchase) => sum + Number(purchase.cost || 0), 0))}</p>
+          <div className="row-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => printHtml(sellerReportHtml(selected, history, { shopName: settings.shopName }))}>Print history</button>
+            <button type="button" className="btn btn-ghost" onClick={() => downloadText(`${selected.name}-buys.csv`, purchasesToCsv(history))}>Download history</button>
+            <button type="button" className="btn btn-ghost" onClick={showPrivate}>Show ID details</button>
+          </div>
+          {privateInfo ? <pre className="private-box">{privateInfo.note || `ID ${privateInfo.idNumber || ''}\nDOB ${privateInfo.dob || ''}\n${privateInfo.address || ''} ${privateInfo.city || ''} ${privateInfo.state || ''} ${privateInfo.zip || ''}`}</pre> : null}
+          {error ? <p className="banner warn">{error}</p> : null}
+          {history.map((purchase) => (
+            <p key={purchase.firebaseKey}>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)} · {money(purchase.cost)} · {statusLabel(purchase.inventoryStatus)}</p>
+          ))}
+        </article>
+      ) : null}
+    </section>
+  );
+}
+
+function CompliancePanel({ purchases, firebaseUser, settings }) {
+  const alerts = cashAlerts(purchases);
+  const [from, setFrom] = useState(todayISO());
+  const [to, setTo] = useState(todayISO());
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function download() {
+    setBusy(true);
+    setError('');
+    try {
+      const chosen = purchases.filter((purchase) => !purchase.deleted && (!from || purchase.date >= from) && (!to || purchase.date <= to));
+      let privateBySellerId = {};
+      try {
+        const snap = await get(ref(db, 'sellerPrivate'));
+        const all = snap.val() || {};
+        const items = Object.entries(all).filter(([, value]) => value && value.idCiphertext).map(([id, value]) => ({
+          id, ciphertext: value.idCiphertext, iv: value.idIv,
+        })).slice(0, 100);
+        if (items.length) {
+          const token = await firebaseUser.getIdToken();
+          const response = await decryptIdentity(token, items);
+          privateBySellerId = {};
+          (response.results || []).forEach((row) => { privateBySellerId[row.id] = row.payload || {}; });
+        }
+      } catch (err) {
+        setError(`${plainError(err)} The file will still download without ID numbers.`);
+      }
+      downloadText(`${settings.shopShortName}-compliance-${from || 'all'}.csv`, complianceToCsv(complianceRows(chosen, privateBySellerId)));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="stack">
+      <article className="card stack">
+        <h2>Cash over $10,000 in a day</h2>
+        <p className="hint">This counts drawer cash and safe cash for one seller on one date. It is a reminder about IRS Form 8300, not tax advice. Nothing is filed from here.</p>
+        {alerts.length === 0 ? <p>No seller is over $10,000 cash in a single day.</p> : alerts.map((alert) => (
+          <p key={`${alert.date}-${alert.name}`}><strong>{alert.name}</strong> · {formatDisplayDate(alert.date)} · {money(alert.cash)} cash · {alert.count} buys</p>
+        ))}
+      </article>
+      <article className="card stack">
+        <h2>Reporting export</h2>
+        <p className="hint">A spreadsheet with seller, ID details, items, photo paths, and payout. It does not send anything to LeadsOnline or anyone else. Photo paths are private locations, not public links.</p>
+        <div className="grid-2">
+          <label>From<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+          <label>To<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+        </div>
+        {error ? <p className="banner warn">{error}</p> : null}
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={download}>{busy ? 'Preparing…' : 'Download compliance file'}</button>
+      </article>
+    </section>
+  );
+}

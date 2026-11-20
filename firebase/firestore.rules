@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isManager() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userData().disabled != true
+        && (userData().role == 'manager' || userData().role == 'admin');
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isManager());
+      allow create: if signedIn() && (
+        (request.auth.uid == uid
+          && request.resource.data.role == 'manager'
+          && request.resource.data.disabled == false
+          && !exists(/databases/$(database)/documents/meta/initialized))
+        || (isManager()
+          && request.auth.uid != uid
+          && request.resource.data.role in ['staff', 'manager', 'admin']
+          && request.resource.data.disabled is bool)
+      );
+      allow update: if isManager()
+        && request.resource.data.role in ['staff', 'manager', 'admin']
+        && request.resource.data.disabled is bool
+        && (request.auth.uid != uid
+          || (request.resource.data.role == resource.data.role
+            && request.resource.data.disabled == resource.data.disabled));
+      allow delete: if false;
+    }
+
+    match /meta/initialized {
+      allow read: if true;
+      allow create, update: if isManager() && request.resource.data.value == true;
+    }
+  }
+}
