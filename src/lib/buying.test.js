@@ -27,7 +27,7 @@ import {
   tenderGap,
   validateBuy,
 } from './buying';
-import { planSlipItems, printableDocument, slipHtml } from './printHtml';
+import { planSlipItems, printableDocument, receiptHtml, slipHtml } from './printHtml';
 
 const user = { uid: 'staff-1', name: 'Alex', email: 'alex@gameday.test' };
 
@@ -107,6 +107,12 @@ test('new purchases keep the original fields and stamp who logged them', () => {
   expect(purchase.deleted).toBe(false);
   expect(purchase.approvalStatus).toBe('not_required');
   expect(purchase.sellerPhone).toBe('5015550100');
+  expect(purchase.inventoryStatus).toBe('bought');
+  expect(purchase.holdDays).toBe(0);
+  expect(purchase.holdUntil).toBe('');
+  expect(receiptText(purchase)).not.toMatch(/Do not sell|Hold/);
+  expect(receiptHtml(purchase, {})).not.toMatch(/Do not sell|Status:/);
+  expect(slipHtml(purchase, { shopName: 'GameDay Sports Cards' })).not.toMatch(/Do not sell|Hold period|inventory/);
 });
 
 test('a manager logging a large buy is stamped approved', () => {

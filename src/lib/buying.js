@@ -914,7 +914,6 @@ export function receiptText(purchase, shop) {
       const flag = item.verificationStatus && item.verificationStatus !== 'unchecked' ? ` [${item.verificationStatus}]` : '';
       return `- ${item.description || 'Item'}${cert}${flag}`;
     }),
-    purchase.holdUntil ? `Do not sell until ${formatDisplayDate(purchase.holdUntil)}` : '',
     purchase.approvalStatus === 'pending' ? 'PENDING MANAGER APPROVAL' : '',
     purchase.notes ? `Notes: ${purchase.notes}` : '',
     'Thank you.',

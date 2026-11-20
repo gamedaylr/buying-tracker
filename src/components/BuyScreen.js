@@ -4,7 +4,6 @@ import { useAuth } from '../auth/AuthProvider';
 import { parseAamva } from '../lib/aamva';
 import {
   PAYMENT_METHODS,
-  INVENTORY_STATUSES,
   approvalDecision,
   applyCompInput,
   applyCostInput,
@@ -514,18 +513,8 @@ export default function BuyScreen({ onManage }) {
             </p>
           ) : null}
 
-          <div className="grid-2">
-            <label>Number of cards
-              <input type="number" min="0" step="1" value={form.numCards} onChange={(event) => setField('numCards', event.target.value)} />
-            </label>
-            <label>What happens to the cards next
-              <select value={form.inventoryStatus} onChange={(event) => setField('inventoryStatus', event.target.value)}>
-                {INVENTORY_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-              </select>
-            </label>
-          </div>
-          <label>Hold period in days
-            <input type="number" min="0" max="365" value={form.holdDays} onChange={(event) => setField('holdDays', event.target.value)} placeholder={settings.holdDays ? String(settings.holdDays) : '0 means no hold'} />
+          <label>Number of cards
+            <input type="number" min="0" step="1" value={form.numCards} onChange={(event) => setField('numCards', event.target.value)} />
           </label>
           <label>Notes
             <textarea rows="2" value={form.notes} onChange={(event) => setField('notes', event.target.value)} placeholder="Anything you would search later" />

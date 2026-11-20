@@ -560,10 +560,6 @@ function SettingsPanel({ settings }) {
         <input type="number" min="0" step="0.01" value={form.approvalAmount} onChange={(event) => set('approvalAmount', event.target.value)} />
       </label>
       <p className="hint">Use 0 if the dollar amount should not force approval. Offers above the cash or store-credit percent still need a manager.</p>
-      <label>Default hold, in days
-        <input type="number" min="0" max="365" value={form.holdDays} onChange={(event) => set('holdDays', event.target.value)} />
-      </label>
-      <p className="hint">0 means no hold. A hold reminds the shop not to sell those cards until the date on the buy.</p>
       {error ? <p className="banner warn">{error}</p> : null}
       {notice ? <p className="banner ok">{notice}</p> : null}
       <button className="btn btn-primary" type="submit">Save settings</button>

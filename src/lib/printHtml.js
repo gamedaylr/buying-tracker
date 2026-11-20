@@ -262,7 +262,6 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
         Buyer: ${escapeHtml(purchase.buyerName || '')}<br>
         Logged by: ${escapeHtml(purchase.loggedByName || purchase.buyerName || '')}<br>
         ID on file: ${purchase.idOnFile ? 'Yes' : 'No'}
-        ${purchase.holdUntil ? `<br>Do not sell until ${escapeHtml(formatDisplayDate(purchase.holdUntil))}` : ''}
         ${purchase.approvalStatus === 'pending' ? '<br><strong>Pending manager approval</strong>' : ''}
       </p>
       <p class="meta">Comp ${money(purchase.lotComp || 0)}.
@@ -272,7 +271,7 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
       </p>
       <ul>${payments}</ul>
       <p class="total">Total ${money(purchase.cost || 0)}</p>
-      <p class="meta">Cards: ${escapeHtml(purchase.numCards || 0)} · Status: ${escapeHtml(statusLabel(purchase.inventoryStatus))}</p>
+      <p class="meta">Cards: ${escapeHtml(purchase.numCards || 0)}</p>
       ${items ? `<table><thead><tr><th>Item</th><th>Cert</th><th>Lookup</th><th>Check</th></tr></thead><tbody>${items}</tbody></table>` : ''}
       ${purchase.notes ? `<p class="note">Notes: ${escapeHtml(purchase.notes)}</p>` : ''}
       ${signatureUrl ? `<div class="sig"><div class="note">Seller signature</div><img src="${escapeHtml(signatureUrl)}" alt="Signature"></div>` : '<p class="note">No signature on this receipt.</p>'}
