@@ -1,0 +1,52 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function userPath() {
+      return /databases/(default)/documents/users/$(request.auth.uid);
+    }
+    function active() {
+      return request.auth != null
+        && firestore.exists(userPath())
+        && firestore.get(userPath()).data.disabled != true
+        && (firestore.get(userPath()).data.role == 'staff'
+          || firestore.get(userPath()).data.role == 'manager'
+          || firestore.get(userPath()).data.role == 'admin');
+    }
+    function manager() {
+      return request.auth != null
+        && firestore.exists(userPath())
+        && firestore.get(userPath()).data.disabled != true
+        && (firestore.get(userPath()).data.role == 'manager'
+          || firestore.get(userPath()).data.role == 'admin');
+    }
+    function imageFile() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    match /purchases/{uid}/{purchaseId}/cards/{fileName} {
+      allow read: if manager() || (active() && request.auth.uid == uid);
+      allow create: if active() && request.auth.uid == uid && imageFile();
+      allow update: if false;
+      allow delete: if manager();
+    }
+    match /purchases/{uid}/{purchaseId}/payment/{fileName} {
+      allow read: if manager() || (active() && request.auth.uid == uid);
+      allow create: if active() && request.auth.uid == uid && imageFile();
+      allow update: if false;
+      allow delete: if manager();
+    }
+    match /purchases/{uid}/{purchaseId}/signature/{fileName} {
+      allow read: if manager() || (active() && request.auth.uid == uid);
+      allow create: if active() && request.auth.uid == uid && imageFile();
+      allow update: if false;
+      allow delete: if manager();
+    }
+    match /purchases/{uid}/{purchaseId}/id/{fileName} {
+      allow read: if manager();
+      allow create: if active() && request.auth.uid == uid && imageFile();
+      allow update: if false;
+      allow delete: if manager();
+    }
+  }
+}
