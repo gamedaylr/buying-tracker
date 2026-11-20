@@ -150,9 +150,6 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
   const tenders = paymentLines(source).map((line) => (
     `<div class="tender"><span>${escapeHtml(line.label)}</span><span>${money(line.amount)}</span></div>`
   )).join('');
-  const comp = Number(source.lotComp) > 0
-    ? `<div class="percent">${escapeHtml(String(Number(source.percentageBought) || 0))}% of ${money(source.lotComp)} comp</div>`
-    : '';
   const pending = source.approvalStatus === 'pending'
     ? '<div class="flag">PENDING APPROVAL</div>'
     : '';
@@ -187,7 +184,7 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
       .amt { flex: none; }
       .more { font-size: 12px; font-weight: 800; margin-top: 2px; }
       .total { font-size: 22px; font-weight: 800; line-height: 1; }
-      .tender, .percent { font-size: 12px; font-weight: 700; line-height: 1.25; }
+      .tender { font-size: 12px; font-weight: 700; line-height: 1.25; }
       .flag { margin-top: 3px; border: 2px solid #000; text-align: center; font-size: 12px; font-weight: 800; padding: 1px 0; }
       .sign { margin-top: auto; padding-top: 4px; }
       .sign img { display: block; height: 0.46in; max-width: 2.4in; object-fit: contain; object-position: left center; background: #fff; }
@@ -216,7 +213,6 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
         <div class="rule"></div>
         <div class="total"><span>COST</span><span>${money(source.cost || 0)}</span></div>
         ${tenders}
-        ${comp}
       </div>
       <div class="sign">${signature}<div class="sign-label">SELLER SIGNATURE</div></div>
     </div></body></html>`;
@@ -263,11 +259,6 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
         Logged by: ${escapeHtml(purchase.loggedByName || purchase.buyerName || '')}<br>
         ID on file: ${purchase.idOnFile ? 'Yes' : 'No'}
         ${purchase.approvalStatus === 'pending' ? '<br><strong>Pending manager approval</strong>' : ''}
-      </p>
-      <p class="meta">Comp ${money(purchase.lotComp || 0)}.
-        Cash offer ${money(purchase.cashOffer || 0)} (${escapeHtml(purchase.cashOfferPercent || '')}%).
-        Store credit offer ${money(purchase.creditOffer || 0)} (${escapeHtml(purchase.creditOfferPercent || '')}%).
-        Seller took <strong>${purchase.payoutType === 'store_credit' ? 'store credit' : 'cash'}</strong>.
       </p>
       <ul>${payments}</ul>
       <p class="total">Total ${money(purchase.cost || 0)}</p>

@@ -277,6 +277,16 @@ export function paymentLines(purchase) {
     .filter((method) => method.amount > 0);
 }
 
+/** Card count the seller is told. Line items win, then the number entered, then photos. */
+export function cardsOnBuy(form, lineItems, extraPhotos) {
+  const lines = lineItems || [];
+  if (lines.length) {
+    return lines.reduce((sum, item) => sum + Math.max(1, Math.round(num(item.quantity) || 1)), 0);
+  }
+  if (form && form.numCards !== '' && form.numCards != null) return Math.max(0, Math.round(num(form.numCards)));
+  return extraPhotos || 0;
+}
+
 export function paymentSummary(purchase) {
   const lines = paymentLines(purchase);
   if (!lines.length) return '';
@@ -902,10 +912,6 @@ export function receiptText(purchase, shop) {
     purchase.sellerPhone ? `Phone: ${purchase.sellerPhone}` : '',
     `Buyer: ${purchase.buyerName || ''}`,
     purchase.loggedByName ? `Logged by: ${purchase.loggedByName}` : '',
-    purchase.lotComp ? `Comp: ${money(purchase.lotComp)}` : '',
-    purchase.payoutType === 'store_credit'
-      ? `Took store credit (${purchase.creditOfferPercent || ''}% offer ${money(purchase.creditOffer || 0)})`
-      : `Took cash (${purchase.cashOfferPercent || ''}% offer ${money(purchase.cashOffer || 0)})`,
     paymentSummary(purchase),
     `Total: ${money(purchase.cost)}`,
     purchase.numCards ? `Cards: ${purchase.numCards}` : '',

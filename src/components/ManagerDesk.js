@@ -15,6 +15,7 @@ import {
   lineItemsOf,
   matchesSearch,
   money,
+  num,
   paymentSummary,
   purchaseInRange,
   purchasesForTender,
@@ -273,6 +274,7 @@ export default function ManagerDesk() {
                 {openId === purchase.firebaseKey && open ? (
                   <div className="stack">
                     <p>{purchase.payoutType === 'store_credit' ? 'Took store credit' : 'Took cash'} · {statusLabel(purchase.inventoryStatus)}{purchase.holdUntil ? ` · do not sell until ${formatDisplayDate(purchase.holdUntil)}` : ''}</p>
+                    {num(purchase.lotComp) > 0 ? <p>Comp {money(purchase.lotComp)} · {purchase.percentageBought || 0}% of comp</p> : null}
                     <p>{lineItemsOf(purchase).map((item) => `${item.description || 'Item'} ${item.grader || ''} ${item.certNumber || ''} ${item.verificationStatus || ''}`).join(' · ')}</p>
                     {purchase.notes ? <p>{purchase.notes}</p> : null}
                     <PhotoStrip label="Card photos" photos={(purchase.photos && purchase.photos.cards) || {}} />

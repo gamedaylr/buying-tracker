@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function SignaturePad({ onChange }) {
+export default function SignaturePad({ onChange, tall }) {
   const canvasRef = useRef(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -112,7 +112,7 @@ export default function SignaturePad({ onChange }) {
 
   return (
     <div className="signature-wrap">
-      <canvas ref={canvasRef} className="signature" />
+      <canvas ref={canvasRef} className={tall ? 'signature signature-tall' : 'signature'} />
       <p className="hint">Sign with a finger or a stylus.</p>
       <button type="button" className="btn btn-ghost" onClick={clear}>Clear signature</button>
     </div>

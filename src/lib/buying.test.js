@@ -5,6 +5,7 @@ import {
   applyManagerEdit,
   approvalDecision,
   buildPurchase,
+  cardsOnBuy,
   cashAlerts,
   complianceToCsv,
   computeOffers,
@@ -57,6 +58,12 @@ function form(overrides) {
     ...overrides,
   };
 }
+
+test('the seller handoff counts cards and leaves out the comp', () => {
+  expect(cardsOnBuy({ numCards: '4' }, [], 2)).toBe(4);
+  expect(cardsOnBuy({ numCards: '' }, [{ quantity: 2 }, { quantity: 1 }], 9)).toBe(3);
+  expect(cardsOnBuy({ numCards: '' }, [], 2)).toBe(2);
+});
 
 test('offers use the manager percentages', () => {
   const offers = computeOffers(200, { cashPercent: 70, creditPercent: 80 });
@@ -395,7 +402,9 @@ test('the thermal slip is one 4x6 label and keeps a long list on that label', ()
   expect(html).toContain('COST');
   expect(html).toContain('$7.00');
   expect(html).toContain('Store credit');
-  expect(html).toContain('50% of $10.00 comp');
+  expect(html).not.toMatch(/\bcomp\b|% of/);
+  expect(receiptText(short)).not.toMatch(/\bcomp\b|%/i);
+  expect(receiptHtml(short, { shopName: 'GameDay Sports Cards' })).not.toMatch(/\bcomp\b|% of|Cash offer|Store credit offer/i);
   expect(html).toContain('blob:sig');
   expect(html).not.toContain('#444');
   const many = Array.from({ length: 20 }, (_, index) => ({

@@ -8,6 +8,7 @@ import {
   applyCompInput,
   applyCostInput,
   applyPercentInput,
+  cardsOnBuy,
   computeOffers,
   emptyForm,
   findSellers,
@@ -17,6 +18,7 @@ import {
   mailtoHref,
   money,
   num,
+  paymentLines,
   priorCashForSeller,
   receiptText,
   smsHref,
@@ -33,6 +35,36 @@ import { receiptHtml, slipHtml } from '../lib/printHtml';
 import PhotoPicker from './PhotoPicker';
 import Scanner from './Scanner';
 import SignaturePad from './SignaturePad';
+
+function SellerSign({ shopName, amount, tenders, cards, photos, signed, onSign, onDone, onBack }) {
+  const cardLabel = cards === 1 ? '1 card' : `${cards} cards`;
+  return (
+    <main className="seller-screen" data-testid="seller-sign">
+      <h1 className="seller-shop">{shopName}</h1>
+      <p className="seller-k">We're paying you</p>
+      <p className="seller-pay">{money(amount)}</p>
+      {tenders.length > 0 ? (
+        <ul className="seller-tenders">
+          {tenders.map((line) => (
+            <li key={line.key}><span>{line.label}</span><span>{money(line.amount)}</span></li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="seller-cards">{cardLabel}</p>
+      {photos.length > 0 ? (
+        <div className="thumbs seller-thumbs">
+          {photos.map((src) => <img key={src} src={src} alt="" />)}
+        </div>
+      ) : null}
+      <p className="seller-agree">I agree to sell these cards to {shopName} for the amount above.</p>
+      <SignaturePad tall onChange={onSign} />
+      <div className="seller-actions">
+        <button type="button" className="btn btn-primary btn-save" disabled={!signed} onClick={onDone}>Done</button>
+        <button type="button" className="btn btn-ghost" onClick={onBack}>Back</button>
+      </div>
+    </main>
+  );
+}
 
 function newLine() {
   const id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `line-${Date.now()}`;
@@ -58,6 +90,8 @@ export default function BuyScreen({ onManage }) {
   const [cardFiles, setCardFiles] = useState([]);
   const [paymentFiles, setPaymentFiles] = useState([]);
   const [signatureBlob, setSignatureBlob] = useState(null);
+  const [step, setStep] = useState('staff');
+  const signedKey = useRef('');
   const [lineItems, setLineItems] = useState([]);
   const [identity, setIdentity] = useState(null);
   const [showId, setShowId] = useState(false);
@@ -93,6 +127,29 @@ export default function BuyScreen({ onManage }) {
     () => (seller ? [] : findSellers(sellers, form.boughtFrom || form.sellerPhone)),
     [seller, sellers, form.boughtFrom, form.sellerPhone],
   );
+  const dealKey = useMemo(() => JSON.stringify({
+    form,
+    sellerId: seller && (seller.id || seller.firebaseKey || seller.name),
+    identity: identity ? { idNumber: identity.idNumber, dob: identity.dob, address: identity.address } : null,
+    lines: lineItems.map((item) => ({
+      id: item.id,
+      description: item.description,
+      quantity: item.quantity,
+      grader: item.grader,
+      certNumber: item.certNumber,
+      photoUrl: item.photoUrl,
+      verificationStatus: item.verificationStatus,
+    })),
+    cards: cardFiles.map((file) => file.id),
+    ids: idFiles.map((file) => file.id),
+    payments: paymentFiles.map((file) => file.id),
+  }), [form, seller, identity, lineItems, cardFiles, idFiles, paymentFiles]);
+
+  useEffect(() => {
+    if (!signedKey.current || signedKey.current === dealKey) return;
+    signedKey.current = '';
+    setSignatureBlob(null);
+  }, [dealKey]);
 
   function setField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -219,6 +276,10 @@ export default function BuyScreen({ onManage }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (!signatureBlob) {
+      goToSign();
+      return;
+    }
     if (savingRef.current || result) return;
     const problem = validateBuy({
       form,
@@ -323,7 +384,43 @@ export default function BuyScreen({ onManage }) {
     setError('');
     setPrintNote('');
     setTendersFollow(true);
+    setStep('staff');
+    signedKey.current = '';
     savingRef.current = false;
+  }
+
+  function goToSign() {
+    const problem = validateBuy({
+      form,
+      settings,
+      sellerHasIdPhoto: Boolean(seller && seller.hasIdPhoto),
+      newIdPhotoCount: idFiles.length,
+      lineItems,
+    });
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    if (!tenderGap(form).matches) {
+      setError('Payment boxes have to add up to the cost paid.');
+      return;
+    }
+    setError('');
+    setSignatureBlob(null);
+    signedKey.current = '';
+    setStep('sign');
+  }
+
+  function backFromSign() {
+    setSignatureBlob(null);
+    signedKey.current = '';
+    setStep('staff');
+  }
+
+  function finishSign() {
+    if (!signatureBlob) return;
+    signedKey.current = dealKey;
+    setStep('staff');
   }
 
   useEffect(() => {
@@ -336,6 +433,26 @@ export default function BuyScreen({ onManage }) {
   const gap = tenderGap(form);
   const locked = Boolean(result);
   const tenderName = form.payoutType === 'store_credit' ? 'Store credit' : 'Cash';
+  const cardPhotos = [
+    ...cardFiles.map((file) => file.url),
+    ...lineItems.map((item) => item.photoUrl).filter(Boolean),
+  ];
+
+  if (step === 'sign') {
+    return (
+      <SellerSign
+        shopName={settings.shopName}
+        amount={num(form.cost)}
+        tenders={paymentLines(form)}
+        cards={cardsOnBuy(form, lineItems, cardFiles.length)}
+        photos={cardPhotos}
+        signed={Boolean(signatureBlob)}
+        onSign={setSignatureBlob}
+        onDone={finishSign}
+        onBack={backFromSign}
+      />
+    );
+  }
 
   return (
     <div className="app" data-testid="buy-screen">
@@ -580,19 +697,23 @@ export default function BuyScreen({ onManage }) {
 
           <PhotoPicker label="Photos of the cards" hint="Take a few. Later, tags can be added to each photo." files={cardFiles} onChange={setCardFiles} multiple limit={12} />
           <PhotoPicker label="Payment proof" hint="A screenshot of Cash App, Zelle, Venmo, or PayPal." files={paymentFiles} onChange={setPaymentFiles} multiple limit={4} />
-          <fieldset>
-            <legend>Seller signature</legend>
-            <SignaturePad onChange={setSignatureBlob} />
-          </fieldset>
 
+          {signatureBlob && !locked ? (
+            <p className="banner ok">Seller signed. Save and print, or change the buy and they will need to sign again.</p>
+          ) : null}
           {error ? <p className="banner warn">{error}</p> : null}
           {!gap.matches ? (
             <p className="banner warn" role="alert">
-              Payment boxes add up to {money(gap.paid)}. Cost paid is {money(gap.cost)}. They need to match before you save.
+              Payment boxes add up to {money(gap.paid)}. Cost paid is {money(gap.cost)}. They need to match before you continue.
             </p>
           ) : null}
-          <button className="btn btn-primary btn-save" type="submit" disabled={saving || locked || !gap.matches}>
-            {saving ? 'Saving…' : locked ? 'Saved' : 'Save and print slip'}
+          <button
+            className="btn btn-primary btn-save"
+            type={signatureBlob || locked ? 'submit' : 'button'}
+            onClick={signatureBlob || locked ? undefined : goToSign}
+            disabled={saving || locked || !gap.matches}
+          >
+            {saving ? 'Saving…' : locked ? 'Saved' : signatureBlob ? 'Save and print slip' : 'Next: seller signs'}
           </button>
           </fieldset>
         </form>
