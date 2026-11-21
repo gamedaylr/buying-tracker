@@ -37,6 +37,7 @@ import { approveWithManagerLogin } from '../services/accounts';
 import { savePurchase } from '../services/purchases';
 import { absoluteAsset, closePrintWindow, copyText, preparePrintWindow, printHtml, watchLabelPrint } from '../services/print';
 import { receiptHtml, slipHtml } from '../lib/printHtml';
+import { readRecentLocations, readStoredLocation, rememberLocation } from '../lib/locations';
 import PhotoPicker from './PhotoPicker';
 import Scanner from './Scanner';
 import SignaturePad from './SignaturePad';
@@ -121,7 +122,8 @@ function newLine() {
 
 export default function BuyScreen({ onManage }) {
   const { firebaseUser, profile, settings, sellers, signOutShop } = useAuth();
-  const [form, setForm] = useState(() => emptyForm(profile, settings));
+  const [form, setForm] = useState(() => ({ ...emptyForm(profile, settings), location: readStoredLocation() }));
+  const [recentLocations, setRecentLocations] = useState(() => readRecentLocations());
   const [seller, setSeller] = useState(null);
   const [idFiles, setIdFiles] = useState([]);
   const [cardFiles, setCardFiles] = useState([]);
@@ -355,6 +357,7 @@ export default function BuyScreen({ onManage }) {
       setError('Payment boxes have to add up to the cost paid.');
       return;
     }
+    rememberLocation(form.location);
     const printWindow = preparePrintWindow();
     savingRef.current = true;
     setSaving(true);
@@ -442,8 +445,15 @@ export default function BuyScreen({ onManage }) {
     }
   }
 
+  function keepLocation(value) {
+    const name = rememberLocation(value);
+    setForm((prev) => ({ ...prev, location: name }));
+    setRecentLocations(readRecentLocations());
+  }
+
   function reset() {
-    setForm(emptyForm(profile, settings));
+    setForm({ ...emptyForm(profile, settings), location: readStoredLocation() });
+    setRecentLocations(readRecentLocations());
     setSeller(null);
     setIdFiles([]);
     setCardFiles([]);
@@ -640,6 +650,24 @@ export default function BuyScreen({ onManage }) {
               <input value={form.buyerName} onChange={(event) => setField('buyerName', event.target.value)} required />
             </label>
           </div>
+          <label>Location
+            <input
+              value={form.location || ''}
+              onChange={(event) => setField('location', event.target.value)}
+              onBlur={(event) => keepLocation(event.target.value)}
+              list="recent-locations"
+              autoComplete="off"
+            />
+          </label>
+          <div className="location-picks">
+            {recentLocations.filter((name) => name.toLowerCase() !== String(form.location || '').trim().toLowerCase()).map((name) => (
+              <button type="button" className="btn btn-ghost" key={name} onClick={() => keepLocation(name)}>{name}</button>
+            ))}
+          </div>
+          <p className="hint">This stays on this device until you change it. Tap a recent name instead of retyping it.</p>
+          <datalist id="recent-locations">
+            {recentLocations.map((name) => <option key={name} value={name} />)}
+          </datalist>
 
           <fieldset className="stack">
             <legend>Seller</legend>

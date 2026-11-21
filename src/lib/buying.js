@@ -20,6 +20,28 @@ export const INVENTORY_STATUSES = [
 
 export const FORM_8300_CASH_LIMIT = 10000;
 
+export const DEFAULT_LOCATION = 'In Shop';
+
+/** Blank locations on older buys are In Shop. */
+export function locationName(value) {
+  const text = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+  return text || DEFAULT_LOCATION;
+}
+
+export function locationsMatch(a, b) {
+  return locationName(a).toLowerCase() === locationName(b).toLowerCase();
+}
+
+export function knownLocations(purchases) {
+  const seen = new Map();
+  (purchases || []).forEach((purchase) => {
+    const name = locationName(purchase && purchase.location);
+    seen.set(name.toLowerCase(), name);
+  });
+  if (!seen.has(DEFAULT_LOCATION.toLowerCase())) seen.set(DEFAULT_LOCATION.toLowerCase(), DEFAULT_LOCATION);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
 /**
  * Defaults for this deployment. A manager can change every one of these
  * in settings. `shopId` is stamped on new records so a later version can
@@ -247,6 +269,7 @@ export function emptyForm(user, settings) {
     storeCredit: '',
     cost: '',
     notes: '',
+    location: DEFAULT_LOCATION,
     inventoryStatus: 'bought',
     holdDays: normalized.holdDays ? String(normalized.holdDays) : '',
   };
@@ -514,6 +537,7 @@ export function buildPurchase({
     storeCredit: roundMoney(form.storeCredit),
     cost,
     notes: String(form.notes || '').trim(),
+    location: locationName(form.location),
     receiptRequested: normalizeReceiptRequest(receiptRequested),
     shopId: normalized.shopId,
     timestamp: new Date().toISOString(),
@@ -573,6 +597,7 @@ export function applyManagerEdit(existing, form, lineItems) {
     storeCredit: roundMoney(form.storeCredit),
     cost: roundMoney(form.cost),
     notes: String(form.notes || '').trim(),
+    location: locationName(form.location === undefined ? existing.location : form.location),
     payoutType,
     agreedPercent: agreedPercent(form.cost, form.lotComp) || roundPercent(form.percentageBought),
     inventoryStatus: form.inventoryStatus || existing.inventoryStatus || 'bought',
@@ -616,6 +641,7 @@ export function formFromPurchase(purchase) {
     storeCredit: purchase.storeCredit ? String(purchase.storeCredit) : '',
     cost: purchase.cost != null ? String(purchase.cost) : '',
     notes: purchase.notes || '',
+    location: locationName(purchase.location),
     inventoryStatus: purchase.inventoryStatus || 'bought',
     holdDays: purchase.holdDays ? String(purchase.holdDays) : '',
   };
@@ -690,6 +716,7 @@ export function matchesSearch(purchase, filters) {
   if (f.paymentMethod && f.paymentMethod !== 'any') {
     if (num(purchase[f.paymentMethod]) <= 0) return false;
   }
+  if (f.location && f.location !== 'any' && !locationsMatch(purchase.location, f.location)) return false;
   if (f.text) {
     const q = f.text.trim().toLowerCase();
     const items = lineItemsOf(purchase).map((item) => [
@@ -706,6 +733,7 @@ export function matchesSearch(purchase, filters) {
       purchase.buyerName,
       purchase.loggedByName,
       purchase.notes,
+      locationName(purchase.location),
       purchase.date,
       purchase.purchaseNumber,
       purchase.sellerPhone,
@@ -776,12 +804,13 @@ export function sortPurchasesNewestFirst(purchases) {
   return [...(purchases || [])].sort(comparePurchasesNewestFirst);
 }
 
-export function purchaseInRange(purchase, { from, to, includeDeleted } = {}) {
+export function purchaseInRange(purchase, { from, to, includeDeleted, location } = {}) {
   if (!purchase) return false;
   if (!includeDeleted && purchase.deleted) return false;
   const date = String(purchase.date || '');
   if (from && date < from) return false;
   if (to && date > to) return false;
+  if (location && location !== 'any' && !locationsMatch(purchase.location, location)) return false;
   return true;
 }
 
@@ -846,7 +875,7 @@ export function purchasesToCsv(purchases) {
   const header = [
     'Purchase #', 'Date', 'Buyer', 'Logged by', 'Seller', 'Phone', 'Email', 'Comp', '% of comp',
     'Payout', 'Cards', 'Cash', 'Safe', 'Cash App', 'Venmo', 'Zelle', 'PayPal', 'Trade', 'Store credit',
-    'Cost', 'Status', 'Approval', 'Hold until', 'Notes', 'Certs', 'Needs review', 'Deleted', 'Receipt',
+    'Cost', 'Status', 'Approval', 'Hold until', 'Notes', 'Certs', 'Needs review', 'Deleted', 'Receipt', 'Location',
   ];
   const rows = (purchases || []).map((purchase) => {
     const certs = lineItemsOf(purchase)
@@ -882,6 +911,7 @@ export function purchasesToCsv(purchases) {
       purchase.needsReview ? 'yes' : '',
       purchase.deleted ? 'yes' : '',
       receiptChoiceLabel(purchase.receiptRequested),
+      locationName(purchase.location),
     ].map(csvCell).join(',');
   });
   return [header.map(csvCell).join(','), ...rows].join('\n');

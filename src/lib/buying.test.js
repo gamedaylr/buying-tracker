@@ -15,12 +15,17 @@ import {
   computeOffers,
   form8300Status,
   idIsRequired,
+  knownLocations,
+  locationName,
+  locationsMatch,
   matchesSearch,
   money,
   nextPurchaseNumberFrom,
   normalizeSettings,
+  purchaseInRange,
   purchasesToCsv,
   receiptText,
+  sumPurchases,
   applyCompInput,
   applyCostInput,
   applyPercentInput,
@@ -130,6 +135,40 @@ test('$121 comp and $85 paid stays $85 and shows 70.25%', () => {
   expect(again.percentageBought).toBe(70.25);
   expect(normalizeSettings({ cashPercent: 70.25, creditPercent: 80.5 }).cashPercent).toBe(70.25);
   expect(normalizeSettings({ cashPercent: 70.25, creditPercent: 80.5 }).creditPercent).toBe(80.5);
+});
+
+test('a location is saved, older buys count as In Shop, and search can find the show', () => {
+  expect(locationName('')).toBe('In Shop');
+  expect(locationName('  Cabot   Card Show ')).toBe('Cabot Card Show');
+  expect(locationsMatch(undefined, 'In Shop')).toBe(true);
+  expect(locationsMatch('cabot card show', 'Cabot Card Show')).toBe(true);
+  const show = { date: '2026-11-21', cost: 85, cash: 85, location: 'Cabot Card Show', purchaseNumber: 3, deleted: false };
+  const shop = { date: '2026-11-21', cost: 10, cash: 10, purchaseNumber: 2, deleted: false };
+  expect(matchesSearch(show, { text: 'cabot' })).toBe(true);
+  expect(matchesSearch(shop, { text: 'in shop' })).toBe(true);
+  expect(matchesSearch(shop, { location: 'In Shop' })).toBe(true);
+  expect(matchesSearch(show, { location: 'In Shop' })).toBe(false);
+  expect(purchaseInRange(show, { from: '2026-11-21', to: '2026-11-21', location: 'Cabot Card Show' })).toBe(true);
+  expect(purchaseInRange(shop, { from: '2026-11-21', to: '2026-11-21', location: 'Cabot Card Show' })).toBe(false);
+  const totals = sumPurchases([show, shop].filter((row) => locationsMatch(row.location, 'Cabot Card Show')));
+  expect(totals.slips).toBe(1);
+  expect(totals.cashDrawer).toBe(85);
+  expect(knownLocations([shop, show])).toEqual(['Cabot Card Show', 'In Shop']);
+  const purchase = buildPurchase({
+    form: form({ location: 'Cabot Card Show', cost: '85', cash: '85', lotComp: '121' }),
+    purchaseNumber: 40,
+    user,
+    settings: DEFAULT_SETTINGS,
+    photos: { cards: [], id: [], payment: [] },
+    lineItems: [],
+    userIsManager: true,
+  });
+  expect(purchase.location).toBe('Cabot Card Show');
+  expect(purchase.cost).toBe(85);
+  const slip = slipHtml(purchase, { shopName: 'GameDay Sports Cards' });
+  expect(slip).toContain('Cabot Card Show');
+  expect(receiptText(purchase)).not.toContain('Cabot');
+  expect(receiptHtml(purchase, { shopName: 'GameDay Sports Cards' })).not.toContain('Cabot');
 });
 
 test('the seller handoff counts cards and leaves out the comp', () => {
