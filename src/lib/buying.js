@@ -71,6 +71,11 @@ export function roundMoney(value) {
   return Math.round((num(value) + Number.EPSILON) * 100) / 100;
 }
 
+/** Percents are stored and shown to the hundredth, same as cents. */
+export function roundPercent(value) {
+  return Math.round((num(value) + Number.EPSILON) * 100) / 100;
+}
+
 export function money(value) {
   return `$${roundMoney(value).toFixed(2)}`;
 }
@@ -128,10 +133,10 @@ export function normalizeSettings(raw) {
     idRequired: source.idRequired === false ? false : DEFAULT_SETTINGS.idRequired,
     idThreshold: Number.isFinite(threshold) && threshold >= 0 ? threshold : DEFAULT_SETTINGS.idThreshold,
     cashPercent: Number.isFinite(cashPercent) && cashPercent >= 0 && cashPercent <= 100
-      ? cashPercent
+      ? roundPercent(cashPercent)
       : DEFAULT_SETTINGS.cashPercent,
     creditPercent: Number.isFinite(creditPercent) && creditPercent >= 0 && creditPercent <= 100
-      ? creditPercent
+      ? roundPercent(creditPercent)
       : DEFAULT_SETTINGS.creditPercent,
     approvalAmount: Number.isFinite(approvalAmount) && approvalAmount >= 0
       ? approvalAmount
@@ -168,7 +173,7 @@ export function priceFromPercent(comp, percent) {
 export function agreedPercent(cost, comp) {
   const base = num(comp);
   if (base <= 0) return null;
-  return roundMoney((num(cost) / base) * 100);
+  return roundPercent((num(cost) / base) * 100);
 }
 
 export function inferPayoutType(form) {
@@ -189,7 +194,7 @@ export function approvalDecision({ cost, lotComp, payoutType, settings }) {
     const cap = type === 'store_credit' ? normalized.creditPercent : normalized.cashPercent;
     if (percent > cap + 0.009) {
       const label = type === 'store_credit' ? 'store credit' : 'cash';
-      reasons.push(`This is ${percent.toFixed(1)}% of the comp, above the ${cap}% ${label} rate.`);
+      reasons.push(`This is ${percent.toFixed(2)}% of the comp, above the ${cap}% ${label} rate.`);
     }
   }
   return { needed: reasons.length > 0, reasons, percent };
@@ -317,9 +322,9 @@ export function paymentsTotal(form) {
 }
 
 export function formatPercent(value) {
-  const n = roundMoney(value);
+  const n = roundPercent(value);
   if (!Number.isFinite(n)) return '';
-  return n.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  return n.toFixed(2);
 }
 
 /** Percent of comp from the amount paid. Blank when either side is blank or comp is zero. */
@@ -362,12 +367,20 @@ export function applyCostInput(form, cost, { tendersFollowCost = false } = {}) {
 }
 
 export function applyPercentInput(form, percentageBought, { tendersFollowCost = false } = {}) {
-  const cost = form.lotComp !== '' && form.lotComp != null && percentageBought !== ''
-    ? String(priceFromPercent(form.lotComp, percentageBought))
-    : form.cost;
+  if (percentageBought === '' || form.lotComp === '' || form.lotComp == null) {
+    return { ...form, percentageBought };
+  }
+  const cost = String(priceFromPercent(form.lotComp, percentageBought));
   const next = applyCostInput(form, cost, { tendersFollowCost });
+  // Keep what they are typing. Blur replaces it with the two-decimal result of the cents.
   next.percentageBought = percentageBought;
   return next;
+}
+
+/** After a typed percent, show the two-decimal percent that matches the cents now in cost. */
+export function normalizeTypedPercent(form) {
+  if (form.cost === '' || form.cost == null || form.lotComp === '' || form.lotComp == null) return form;
+  return { ...form, percentageBought: percentText(form.cost, form.lotComp) };
 }
 
 export function tenderGap(form) {
@@ -474,29 +487,32 @@ export function buildPurchase({
     item.verificationStatus === 'mismatch' || item.verificationStatus === 'not_found'
   ));
   const approvedNow = decision.needed && userIsManager;
-  const percent = decision.percent != null ? decision.percent : num(form.percentageBought);
   const sellerName = String((seller && seller.name) || form.boughtFrom || '').trim();
+  const cost = roundMoney(form.cost);
+  const lotComp = roundMoney(form.lotComp);
+  const agreed = agreedPercent(cost, lotComp);
+  const storedPercent = agreed != null ? agreed : roundPercent(form.percentageBought);
 
   return {
     purchaseNumber: num(purchaseNumber),
     date: form.date,
-    lotComp: num(form.lotComp),
-    percentageBought: percent || 0,
+    lotComp,
+    percentageBought: storedPercent,
     numCards: itemCount || num(form.numCards),
     buyerName: String(form.buyerName || '').trim(),
     boughtFrom: sellerName,
     sellerId: (seller && seller.id) || '',
     sellerPhone: phoneDigits((seller && seller.phone) || form.sellerPhone || ''),
     sellerEmail: String((seller && seller.email) || form.sellerEmail || '').trim(),
-    cash: num(form.cash),
-    cashFromSafe: num(form.cashFromSafe),
-    venmo: num(form.venmo),
-    cashApp: num(form.cashApp),
-    zelle: num(form.zelle),
-    paypal: num(form.paypal),
-    trade: num(form.trade),
-    storeCredit: num(form.storeCredit),
-    cost: num(form.cost),
+    cash: roundMoney(form.cash),
+    cashFromSafe: roundMoney(form.cashFromSafe),
+    venmo: roundMoney(form.venmo),
+    cashApp: roundMoney(form.cashApp),
+    zelle: roundMoney(form.zelle),
+    paypal: roundMoney(form.paypal),
+    trade: roundMoney(form.trade),
+    storeCredit: roundMoney(form.storeCredit),
+    cost,
     notes: String(form.notes || '').trim(),
     receiptRequested: normalizeReceiptRequest(receiptRequested),
     shopId: normalized.shopId,
@@ -509,7 +525,7 @@ export function buildPurchase({
     creditOfferPercent: offers.creditPercent,
     cashOffer: offers.cashOffer,
     creditOffer: offers.creditOffer,
-    agreedPercent: decision.percent == null ? 0 : decision.percent,
+    agreedPercent: storedPercent,
     approvalStatus: !decision.needed ? 'not_required' : (approvedNow ? 'approved' : 'pending'),
     approvalReasons: decision.reasons,
     approvedByUid: approvedNow ? user.uid : '',
@@ -537,25 +553,28 @@ export function applyManagerEdit(existing, form, lineItems) {
   const next = {
     ...existing,
     date: form.date,
-    lotComp: num(form.lotComp),
-    percentageBought: agreedPercent(form.cost, form.lotComp) || num(form.percentageBought),
+    lotComp: roundMoney(form.lotComp),
+    percentageBought: (() => {
+      const agreed = agreedPercent(form.cost, form.lotComp);
+      return agreed != null ? agreed : roundPercent(form.percentageBought);
+    })(),
     numCards: itemCount || num(form.numCards),
     buyerName: String(form.buyerName || '').trim(),
     boughtFrom: String(form.boughtFrom || '').trim(),
     sellerPhone: phoneDigits(form.sellerPhone || existing.sellerPhone || ''),
     sellerEmail: String(form.sellerEmail || '').trim(),
-    cash: num(form.cash),
-    cashFromSafe: num(form.cashFromSafe),
-    venmo: num(form.venmo),
-    cashApp: num(form.cashApp),
-    zelle: num(form.zelle),
-    paypal: num(form.paypal),
-    trade: num(form.trade),
-    storeCredit: num(form.storeCredit),
-    cost: num(form.cost),
+    cash: roundMoney(form.cash),
+    cashFromSafe: roundMoney(form.cashFromSafe),
+    venmo: roundMoney(form.venmo),
+    cashApp: roundMoney(form.cashApp),
+    zelle: roundMoney(form.zelle),
+    paypal: roundMoney(form.paypal),
+    trade: roundMoney(form.trade),
+    storeCredit: roundMoney(form.storeCredit),
+    cost: roundMoney(form.cost),
     notes: String(form.notes || '').trim(),
     payoutType,
-    agreedPercent: agreedPercent(form.cost, form.lotComp) || 0,
+    agreedPercent: agreedPercent(form.cost, form.lotComp) || roundPercent(form.percentageBought),
     inventoryStatus: form.inventoryStatus || existing.inventoryStatus || 'bought',
     holdDays,
     holdUntil: holdDays > 0 ? addDaysISO(form.date, holdDays) : '',
@@ -578,7 +597,9 @@ export function formFromPurchase(purchase) {
   return {
     date: purchase.date || todayISO(),
     lotComp: purchase.lotComp ? String(purchase.lotComp) : '',
-    percentageBought: purchase.percentageBought ? String(purchase.percentageBought) : '',
+    percentageBought: num(purchase.lotComp) > 0
+      ? percentText(purchase.cost, purchase.lotComp)
+      : (purchase.percentageBought ? formatPercent(purchase.percentageBought) : ''),
     numCards: purchase.numCards ? String(purchase.numCards) : '',
     buyerName: purchase.buyerName || '',
     boughtFrom: purchase.boughtFrom || '',

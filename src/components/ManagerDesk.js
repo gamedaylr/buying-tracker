@@ -6,10 +6,12 @@ import { useAuth } from '../auth/AuthProvider';
 import {
   INVENTORY_STATUSES,
   PAYMENT_METHODS,
+  agreedPercent,
   cashAlerts,
   complianceRows,
   complianceToCsv,
   formFromPurchase,
+  formatPercent,
   normalizeSettings,
   formatDisplayDate,
   lineItemsOf,
@@ -275,7 +277,7 @@ export default function ManagerDesk() {
                 {openId === purchase.firebaseKey && open ? (
                   <div className="stack">
                     <p>{purchase.payoutType === 'store_credit' ? 'Took store credit' : 'Took cash'} · {statusLabel(purchase.inventoryStatus)}{purchase.holdUntil ? ` · do not sell until ${formatDisplayDate(purchase.holdUntil)}` : ''}</p>
-                    {num(purchase.lotComp) > 0 ? <p>Comp {money(purchase.lotComp)} · {purchase.percentageBought || 0}% of comp</p> : null}
+                    {num(purchase.lotComp) > 0 ? <p>Comp {money(purchase.lotComp)} · {formatPercent(agreedPercent(purchase.cost, purchase.lotComp) ?? purchase.percentageBought)}% of comp</p> : null}
                     <p>Receipt requested: {receiptChoiceLabel(purchase.receiptRequested)}</p>
                     <p>{lineItemsOf(purchase).map((item) => `${item.description || 'Item'} ${item.grader || ''} ${item.certNumber || ''} ${item.verificationStatus || ''}`).join(' · ')}</p>
                     {purchase.notes ? <p>{purchase.notes}</p> : null}
@@ -557,8 +559,8 @@ function SettingsPanel({ settings }) {
       </label>
       <p className="hint">Turn the switch off to stop requiring IDs. Otherwise staff cannot save a buy at or above this amount without an ID photo, unless that seller already has one on file.</p>
       <div className="grid-2">
-        <label>Cash offer %<input type="number" min="0" max="100" step="0.1" value={form.cashPercent} onChange={(event) => set('cashPercent', event.target.value)} /></label>
-        <label>Store credit offer %<input type="number" min="0" max="100" step="0.1" value={form.creditPercent} onChange={(event) => set('creditPercent', event.target.value)} /></label>
+        <label>Cash offer %<input type="number" min="0" max="100" step="0.01" inputMode="decimal" value={form.cashPercent} onChange={(event) => set('cashPercent', event.target.value)} /></label>
+        <label>Store credit offer %<input type="number" min="0" max="100" step="0.01" inputMode="decimal" value={form.creditPercent} onChange={(event) => set('creditPercent', event.target.value)} /></label>
       </div>
       <label>Manager must approve buys at or above
         <input type="number" min="0" step="0.01" value={form.approvalAmount} onChange={(event) => set('approvalAmount', event.target.value)} />

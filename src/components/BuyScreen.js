@@ -12,16 +12,20 @@ import {
   computeOffers,
   emptyForm,
   findSellers,
+  formatPercent,
   form8300Status,
   idIsRequired,
   inferPayoutType,
   mailtoHref,
   money,
   num,
+  normalizeTypedPercent,
   paymentLines,
+  percentText,
   priorCashForSeller,
   receiptContactError,
   receiptText,
+  roundMoney,
   smsHref,
   tenderGap,
   validateBuy,
@@ -206,20 +210,23 @@ export default function BuyScreen({ onManage }) {
   function chooseOffer(type) {
     const amount = type === 'store_credit' ? offers.creditOffer : offers.cashOffer;
     const percent = type === 'store_credit' ? offers.creditPercent : offers.cashPercent;
+    const cost = String(roundMoney(amount));
     setTendersFollow(true);
     setForm((prev) => ({
       ...prev,
       payoutType: type,
-      cost: String(amount),
-      percentageBought: String(percent),
-      cash: type === 'cash' ? String(amount) : '',
+      cost,
+      percentageBought: prev.lotComp !== '' && prev.lotComp != null
+        ? percentText(cost, prev.lotComp)
+        : formatPercent(percent),
+      cash: type === 'cash' ? cost : '',
       cashFromSafe: '',
       cashApp: '',
       venmo: '',
       zelle: '',
       paypal: '',
       trade: '',
-      storeCredit: type === 'store_credit' ? String(amount) : '',
+      storeCredit: type === 'store_credit' ? cost : '',
     }));
   }
 
@@ -233,6 +240,10 @@ export default function BuyScreen({ onManage }) {
 
   function onPercent(value) {
     setForm((prev) => applyPercentInput(prev, value, { tendersFollowCost: tendersFollow }));
+  }
+
+  function onPercentBlur() {
+    setForm((prev) => normalizeTypedPercent(prev));
   }
 
   function onTender(key, value) {
@@ -694,17 +705,17 @@ export default function BuyScreen({ onManage }) {
               <button type="button" className={form.payoutType === 'cash' ? 'offer selected' : 'offer'} onClick={() => chooseOffer('cash')}>
                 <span>Cash</span>
                 <strong>{money(offers.cashOffer)}</strong>
-                <small>{offers.cashPercent}% of comp</small>
+                <small>{formatPercent(offers.cashPercent)}% of comp</small>
               </button>
               <button type="button" className={form.payoutType === 'store_credit' ? 'offer selected' : 'offer'} onClick={() => chooseOffer('store_credit')}>
                 <span>Store credit</span>
                 <strong>{money(offers.creditOffer)}</strong>
-                <small>{offers.creditPercent}% of comp</small>
+                <small>{formatPercent(offers.creditPercent)}% of comp</small>
               </button>
             </div>
             <div className="grid-2">
               <label>Percent of comp
-                <input type="number" min="0" step="0.1" inputMode="decimal" value={form.percentageBought} onChange={(event) => onPercent(event.target.value)} />
+                <input inputMode="decimal" value={form.percentageBought} onChange={(event) => onPercent(event.target.value)} onBlur={onPercentBlur} />
               </label>
               <label>Cost paid
                 <input type="number" min="0" step="0.01" inputMode="decimal" value={form.cost} onChange={(event) => onCost(event.target.value)} required />

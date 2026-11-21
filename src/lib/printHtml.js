@@ -1,4 +1,4 @@
-import { formatDisplayDate, lineItemsOf, money, paymentLines, paymentSummary, statusLabel } from './buying';
+import { agreedPercent, formatDisplayDate, formatPercent, lineItemsOf, money, paymentLines, paymentSummary, statusLabel } from './buying';
 
 function escapeHtml(value) {
   return String(value == null ? '' : value)
@@ -163,8 +163,11 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
   const tenders = paymentLines(source).map((line) => (
     `<div class="tender"><span>${escapeHtml(line.label)}</span><span>${money(line.amount)}</span></div>`
   )).join('');
+  const shownPercent = Number(source.lotComp) > 0
+    ? (agreedPercent(source.cost, source.lotComp) ?? source.percentageBought)
+    : source.percentageBought;
   const comp = Number(source.lotComp) > 0
-    ? `<div class="tender"><span>${escapeHtml(String(Number(source.percentageBought) || 0))}% of ${money(source.lotComp)} comp</span></div>`
+    ? `<div class="tender"><span>${escapeHtml(formatPercent(shownPercent))}% of ${money(source.lotComp)} comp</span></div>`
     : '';
   const pending = source.approvalStatus === 'pending'
     ? '<div class="flag">PENDING APPROVAL</div>'
