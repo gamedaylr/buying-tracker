@@ -1,6 +1,7 @@
 import {
   DEFAULT_SETTINGS,
   agreedPercent,
+  formFromPurchase,
   initialShopId,
   applyManagerEdit,
   approvalDecision,
@@ -14,11 +15,17 @@ import {
   computeOffers,
   form8300Status,
   idIsRequired,
+  knownLocations,
+  locationName,
+  locationsMatch,
   matchesSearch,
+  money,
   nextPurchaseNumberFrom,
   normalizeSettings,
+  purchaseInRange,
   purchasesToCsv,
   receiptText,
+  sumPurchases,
   applyCompInput,
   applyCostInput,
   applyPercentInput,
@@ -86,6 +93,82 @@ test('a receipt is sent only when the seller asks, and the choice is stored', ()
   expect(receiptChoiceLabel('none')).toBe('No receipt');
   const edited = applyManagerEdit(purchase, form({ sellerPhone: '5015550100' }), []);
   expect(edited.receiptRequested).toBe('text');
+});
+
+test('$121 comp and $85 paid stays $85 and shows 70.25%', () => {
+  const start = applyCompInput(emptyForm({ name: 'Alex' }, DEFAULT_SETTINGS), '121');
+  const paid = applyCostInput(start, '85', { tendersFollowCost: true });
+  expect(paid.cost).toBe('85');
+  expect(paid.cash).toBe('85');
+  expect(paid.percentageBought).toBe('70.25');
+  const compChanged = applyCompInput(paid, '200');
+  expect(compChanged.cost).toBe('85');
+  expect(compChanged.percentageBought).toBe('42.50');
+  const typed = applyPercentInput(start, '70.25', { tendersFollowCost: true });
+  expect(typed.cost).toBe('85');
+  const settled = { ...typed, percentageBought: '70.25', date: '2026-11-20', buyerName: 'Alex', boughtFrom: 'Sam', payoutType: 'cash' };
+  const purchase = buildPurchase({
+    form: settled,
+    purchaseNumber: 30,
+    user,
+    settings: DEFAULT_SETTINGS,
+    photos: { cards: [], id: [], payment: [] },
+    lineItems: [],
+    userIsManager: true,
+  });
+  expect(purchase.cost).toBe(85);
+  expect(purchase.percentageBought).toBe(70.25);
+  expect(money(purchase.cost)).toBe('$85.00');
+  const reloaded = formFromPurchase(purchase);
+  expect(reloaded.cost).toBe('85');
+  expect(reloaded.percentageBought).toBe('70.25');
+  const again = buildPurchase({
+    form: { ...reloaded, payoutType: 'cash', buyerName: 'Alex', boughtFrom: 'Sam' },
+    purchaseNumber: 30,
+    user,
+    settings: DEFAULT_SETTINGS,
+    photos: { cards: [], id: [], payment: [] },
+    lineItems: [],
+    userIsManager: true,
+  });
+  expect(again.cost).toBe(85);
+  expect(again.percentageBought).toBe(70.25);
+  expect(normalizeSettings({ cashPercent: 70.25, creditPercent: 80.5 }).cashPercent).toBe(70.25);
+  expect(normalizeSettings({ cashPercent: 70.25, creditPercent: 80.5 }).creditPercent).toBe(80.5);
+});
+
+test('a location is saved, older buys count as In Shop, and search can find the show', () => {
+  expect(locationName('')).toBe('In Shop');
+  expect(locationName('  Cabot   Card Show ')).toBe('Cabot Card Show');
+  expect(locationsMatch(undefined, 'In Shop')).toBe(true);
+  expect(locationsMatch('cabot card show', 'Cabot Card Show')).toBe(true);
+  const show = { date: '2026-11-21', cost: 85, cash: 85, location: 'Cabot Card Show', purchaseNumber: 3, deleted: false };
+  const shop = { date: '2026-11-21', cost: 10, cash: 10, purchaseNumber: 2, deleted: false };
+  expect(matchesSearch(show, { text: 'cabot' })).toBe(true);
+  expect(matchesSearch(shop, { text: 'in shop' })).toBe(true);
+  expect(matchesSearch(shop, { location: 'In Shop' })).toBe(true);
+  expect(matchesSearch(show, { location: 'In Shop' })).toBe(false);
+  expect(purchaseInRange(show, { from: '2026-11-21', to: '2026-11-21', location: 'Cabot Card Show' })).toBe(true);
+  expect(purchaseInRange(shop, { from: '2026-11-21', to: '2026-11-21', location: 'Cabot Card Show' })).toBe(false);
+  const totals = sumPurchases([show, shop].filter((row) => locationsMatch(row.location, 'Cabot Card Show')));
+  expect(totals.slips).toBe(1);
+  expect(totals.cashDrawer).toBe(85);
+  expect(knownLocations([shop, show])).toEqual(['Cabot Card Show', 'In Shop']);
+  const purchase = buildPurchase({
+    form: form({ location: 'Cabot Card Show', cost: '85', cash: '85', lotComp: '121' }),
+    purchaseNumber: 40,
+    user,
+    settings: DEFAULT_SETTINGS,
+    photos: { cards: [], id: [], payment: [] },
+    lineItems: [],
+    userIsManager: true,
+  });
+  expect(purchase.location).toBe('Cabot Card Show');
+  expect(purchase.cost).toBe(85);
+  const slip = slipHtml(purchase, { shopName: 'GameDay Sports Cards' });
+  expect(slip).toContain('Cabot Card Show');
+  expect(receiptText(purchase)).not.toContain('Cabot');
+  expect(receiptHtml(purchase, { shopName: 'GameDay Sports Cards' })).not.toContain('Cabot');
 });
 
 test('the seller handoff counts cards and leaves out the comp', () => {
@@ -361,19 +444,19 @@ test('cost and comp fill the percent, and one tender follows until the payment i
   const start = emptyForm({ name: 'Alex' }, DEFAULT_SETTINGS);
   const withComp = applyCompInput(start, '10');
   const withCost = applyCostInput(withComp, '5', { tendersFollowCost: true });
-  expect(withCost.percentageBought).toBe('50');
+  expect(withCost.percentageBought).toBe('50.00');
   expect(withCost.cash).toBe('5');
   expect(withCost.storeCredit).toBe('');
   expect(tenderGap(withCost).matches).toBe(true);
   const split = applyCostInput({ ...withCost, cash: '3', venmo: '2' }, '6', { tendersFollowCost: false });
   expect(split.cash).toBe('3');
   expect(split.venmo).toBe('2');
-  expect(split.percentageBought).toBe('60');
+  expect(split.percentageBought).toBe('60.00');
   expect(tenderGap(split).matches).toBe(false);
   const credit = applyCostInput({ ...withComp, payoutType: 'store_credit' }, '8', { tendersFollowCost: true });
   expect(credit.storeCredit).toBe('8');
   expect(credit.cash).toBe('');
-  expect(credit.percentageBought).toBe('80');
+  expect(credit.percentageBought).toBe('80.00');
   const fromPercent = applyPercentInput(withComp, '70', { tendersFollowCost: true });
   expect(fromPercent.cost).toBe('7');
   expect(fromPercent.cash).toBe('7');
@@ -432,7 +515,7 @@ test('the thermal slip is one 4x6 label and keeps a long list on that label', ()
   expect(html).toContain('COST');
   expect(html).toContain('$7.00');
   expect(html).toContain('Store credit');
-  expect(html).toContain('50% of $10.00 comp');
+  expect(html).toContain('70.00% of $10.00 comp');
   expect(receiptText(short)).not.toMatch(/\bcomp\b|%/i);
   expect(receiptHtml(short, { shopName: 'GameDay Sports Cards' })).not.toMatch(/\bcomp\b|% of|Cash offer|Store credit offer/i);
   expect(html).toContain('blob:sig');

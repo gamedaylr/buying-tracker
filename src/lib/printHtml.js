@@ -1,4 +1,4 @@
-import { formatDisplayDate, lineItemsOf, money, paymentLines, paymentSummary, statusLabel } from './buying';
+import { agreedPercent, formatDisplayDate, formatPercent, lineItemsOf, locationName, money, paymentLines, paymentSummary, statusLabel } from './buying';
 
 function escapeHtml(value) {
   return String(value == null ? '' : value)
@@ -163,8 +163,11 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
   const tenders = paymentLines(source).map((line) => (
     `<div class="tender"><span>${escapeHtml(line.label)}</span><span>${money(line.amount)}</span></div>`
   )).join('');
+  const shownPercent = Number(source.lotComp) > 0
+    ? (agreedPercent(source.cost, source.lotComp) ?? source.percentageBought)
+    : source.percentageBought;
   const comp = Number(source.lotComp) > 0
-    ? `<div class="tender"><span>${escapeHtml(String(Number(source.percentageBought) || 0))}% of ${money(source.lotComp)} comp</span></div>`
+    ? `<div class="tender"><span>${escapeHtml(formatPercent(shownPercent))}% of ${money(source.lotComp)} comp</span></div>`
     : '';
   const pending = source.approvalStatus === 'pending'
     ? '<div class="flag">PENDING APPROVAL</div>'
@@ -187,7 +190,8 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
       }
       .shop { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.15; max-height: 2.3em; overflow: hidden; }
       .num { font-size: 28px; font-weight: 800; line-height: 1; margin: 1px 0 2px; }
-      .when, .who { font-size: 12px; font-weight: 700; line-height: 1.25; }
+      .when, .who, .where { font-size: 12px; font-weight: 700; line-height: 1.25; }
+      .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .rule { border-top: 2px solid #000; margin: 4px 0; }
       .k { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; }
       .seller { font-size: 15px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -215,6 +219,7 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
       <div class="num">#${escapeHtml(source.purchaseNumber || '')}</div>
       <div class="when">${escapeHtml(when)}${clock ? ` · ${escapeHtml(clock)}` : ''}</div>
       ${staff ? `<div class="who">${escapeHtml(staffLabel)} ${escapeHtml(staff)}</div>` : ''}
+      <div class="where">${escapeHtml(locationName(source.location))}</div>
       <div class="rule"></div>
       <div class="k">SELLER</div>
       <div class="seller">${escapeHtml(source.boughtFrom || 'No seller name')}</div>

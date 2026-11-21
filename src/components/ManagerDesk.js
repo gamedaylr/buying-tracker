@@ -6,13 +6,17 @@ import { useAuth } from '../auth/AuthProvider';
 import {
   INVENTORY_STATUSES,
   PAYMENT_METHODS,
+  agreedPercent,
   cashAlerts,
   complianceRows,
   complianceToCsv,
   formFromPurchase,
+  formatPercent,
   normalizeSettings,
   formatDisplayDate,
+  knownLocations,
   lineItemsOf,
+  locationName,
   matchesSearch,
   money,
   num,
@@ -113,6 +117,7 @@ function PurchaseEditor({ purchase, onClose, profile, settings }) {
         <label>Date<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
         <label>Seller<input value={form.boughtFrom} onChange={(event) => setForm({ ...form, boughtFrom: event.target.value })} /></label>
         <label>Buyer<input value={form.buyerName} onChange={(event) => setForm({ ...form, buyerName: event.target.value })} /></label>
+        <label>Location<input value={form.location || ''} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label>
         <label>Cost<input type="number" step="0.01" value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} /></label>
       </div>
       <div className="pay-grid">
@@ -162,7 +167,7 @@ export default function ManagerDesk() {
   const activity = useCollection('audit');
   const sellers = useCollection('sellers');
   const [filters, setFilters] = useState({
-    dateFrom: '', dateTo: '', seller: '', buyer: '', amount: '', paymentMethod: 'any', text: '', status: 'any', pendingOnly: false, includeDeleted: false,
+    dateFrom: '', dateTo: '', seller: '', buyer: '', amount: '', paymentMethod: 'any', location: 'any', text: '', status: 'any', pendingOnly: false, includeDeleted: false,
   });
   const [visible, setVisible] = useState(40);
   const [openId, setOpenId] = useState('');
@@ -213,7 +218,7 @@ export default function ManagerDesk() {
       </nav>
       <main className="wrap">
         {error || purchases.error ? <p className="banner warn">{error || purchases.error}</p> : null}
-        {tab === 'summary' && <SummaryPanel purchases={purchases.rows} />}
+        {tab === 'summary' && <SummaryPanel purchases={purchases.rows} locations={knownLocations(purchases.rows)} />}
         {tab === 'sellers' && (
           <SellersPanel
             sellers={sellers.rows}
@@ -237,6 +242,12 @@ export default function ManagerDesk() {
                 <label>Seller<input value={filters.seller} onChange={(event) => setFilters({ ...filters, seller: event.target.value })} /></label>
                 <label>Buyer or staff<input value={filters.buyer} onChange={(event) => setFilters({ ...filters, buyer: event.target.value })} /></label>
                 <label>Amount<input value={filters.amount} onChange={(event) => setFilters({ ...filters, amount: event.target.value })} inputMode="decimal" /></label>
+                <label>Location
+                  <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
+                    <option value="any">Any location</option>
+                    {knownLocations(purchases.rows).map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
                 <label>Payment
                   <select value={filters.paymentMethod} onChange={(event) => setFilters({ ...filters, paymentMethod: event.target.value })}>
                     <option value="any">Any</option>
@@ -245,7 +256,7 @@ export default function ManagerDesk() {
                 </label>
               </div>
               <label>Search text
-                <input value={filters.text} onChange={(event) => setFilters({ ...filters, text: event.target.value })} placeholder="Cert, notes, phone, card name" />
+                <input value={filters.text} onChange={(event) => setFilters({ ...filters, text: event.target.value })} placeholder="Cert, notes, phone, location" />
               </label>
               <div className="row-actions">
                 <label className="check"><input type="checkbox" checked={filters.pendingOnly} onChange={(event) => setFilters({ ...filters, pendingOnly: event.target.checked })} /> Needs a manager</label>
@@ -266,7 +277,7 @@ export default function ManagerDesk() {
               <article className="card tx" key={purchase.firebaseKey} data-testid="buy-row" data-slip={purchase.purchaseNumber}>
                 <button type="button" className="tx-main" onClick={() => { setOpenId(purchase.firebaseKey === openId ? '' : purchase.firebaseKey); setEditing(false); }}>
                   <strong>#{purchase.purchaseNumber} · {formatDisplayDate(purchase.date)}</strong>
-                  <span>{purchase.boughtFrom || 'No seller'} · {money(purchase.cost)}</span>
+                  <span>{purchase.boughtFrom || 'No seller'} · {money(purchase.cost)} · {locationName(purchase.location)}</span>
                   <span className="hint">{purchase.buyerName}{purchase.loggedByName ? ` · logged by ${purchase.loggedByName}` : ' · logged before sign-in'}</span>
                   {purchase.approvalStatus === 'pending' ? <em>Pending approval</em> : null}
                   {purchase.needsReview ? <em>Needs review</em> : null}
@@ -275,7 +286,8 @@ export default function ManagerDesk() {
                 {openId === purchase.firebaseKey && open ? (
                   <div className="stack">
                     <p>{purchase.payoutType === 'store_credit' ? 'Took store credit' : 'Took cash'} · {statusLabel(purchase.inventoryStatus)}{purchase.holdUntil ? ` · do not sell until ${formatDisplayDate(purchase.holdUntil)}` : ''}</p>
-                    {num(purchase.lotComp) > 0 ? <p>Comp {money(purchase.lotComp)} · {purchase.percentageBought || 0}% of comp</p> : null}
+                    {num(purchase.lotComp) > 0 ? <p>Comp {money(purchase.lotComp)} · {formatPercent(agreedPercent(purchase.cost, purchase.lotComp) ?? purchase.percentageBought)}% of comp</p> : null}
+                    <p>Location: {locationName(purchase.location)}</p>
                     <p>Receipt requested: {receiptChoiceLabel(purchase.receiptRequested)}</p>
                     <p>{lineItemsOf(purchase).map((item) => `${item.description || 'Item'} ${item.grader || ''} ${item.certNumber || ''} ${item.verificationStatus || ''}`).join(' · ')}</p>
                     {purchase.notes ? <p>{purchase.notes}</p> : null}
@@ -391,8 +403,12 @@ function TenderBuys({ purchases, range, methodKey, title, onBack }) {
   );
 }
 
-function SummaryPanel({ purchases }) {
+function SummaryPanel({ purchases, locations }) {
   const today = todayISO();
+  const [location, setLocation] = useState('any');
+  const scoped = location === 'any'
+    ? purchases
+    : (purchases || []).filter((purchase) => locationName(purchase.location).toLowerCase() === locationName(location).toLowerCase());
   const periods = [
     { id: 'day', title: 'Today', from: today, to: today },
     { id: 'week', title: 'This week', from: startOfWeekISO(), to: today },
@@ -414,13 +430,15 @@ function SummaryPanel({ purchases }) {
     });
   }
 
+  const place = location === 'any' ? '' : locationName(location);
+
   if (drill && drill.level === 'buys') {
     return (
       <TenderBuys
-        purchases={purchases}
+        purchases={scoped}
         range={drill.range}
         methodKey={drill.methodKey}
-        title={drill.title}
+        title={place ? `${drill.title} · ${place}` : drill.title}
         onBack={() => setDrill({ ...drill, level: 'tenders', methodKey: '' })}
       />
     );
@@ -428,9 +446,9 @@ function SummaryPanel({ purchases }) {
   if (drill && drill.level === 'tenders') {
     return (
       <TenderDrill
-        purchases={purchases}
+        purchases={scoped}
         range={drill.range}
-        title={drill.title}
+        title={place ? `${drill.title} · ${place}` : drill.title}
         onBack={() => setDrill(null)}
         onPick={(methodKey) => setDrill({ ...drill, level: 'buys', methodKey })}
       />
@@ -441,7 +459,13 @@ function SummaryPanel({ purchases }) {
     <section className="stack" data-testid="summary-panel">
       <article className="card stack">
         <h2>Date range</h2>
-        <p className="hint">Pick a day or a range, then tap Cash out or any total. Managers are the only people who see this.</p>
+        <p className="hint">Pick a location and a day or range, then tap Cash out or any total. Buys with no location count as In Shop.</p>
+        <label>Location
+          <select value={location} onChange={(event) => { setLocation(event.target.value); setDrill(null); }}>
+            <option value="any">All locations</option>
+            {(locations || []).map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>
         <div className="grid-2">
           <label>From
             <input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
@@ -455,10 +479,10 @@ function SummaryPanel({ purchases }) {
         ) : null}
       </article>
       {customActive ? (
-        <RangeCard title="Selected dates" range={customRange} purchases={purchases} onOpen={() => openRange(customRange)} />
+        <RangeCard title={place ? `Selected dates · ${place}` : 'Selected dates'} range={customRange} purchases={scoped} onOpen={() => openRange(customRange)} />
       ) : null}
       {periods.map((period) => (
-        <RangeCard key={period.id} title={period.title} range={period} purchases={purchases} onOpen={() => openRange(period)} />
+        <RangeCard key={period.id} title={place ? `${period.title} · ${place}` : period.title} range={period} purchases={scoped} onOpen={() => openRange(period)} />
       ))}
     </section>
   );
@@ -557,8 +581,8 @@ function SettingsPanel({ settings }) {
       </label>
       <p className="hint">Turn the switch off to stop requiring IDs. Otherwise staff cannot save a buy at or above this amount without an ID photo, unless that seller already has one on file.</p>
       <div className="grid-2">
-        <label>Cash offer %<input type="number" min="0" max="100" step="0.1" value={form.cashPercent} onChange={(event) => set('cashPercent', event.target.value)} /></label>
-        <label>Store credit offer %<input type="number" min="0" max="100" step="0.1" value={form.creditPercent} onChange={(event) => set('creditPercent', event.target.value)} /></label>
+        <label>Cash offer %<input type="number" min="0" max="100" step="0.01" inputMode="decimal" value={form.cashPercent} onChange={(event) => set('cashPercent', event.target.value)} /></label>
+        <label>Store credit offer %<input type="number" min="0" max="100" step="0.01" inputMode="decimal" value={form.creditPercent} onChange={(event) => set('creditPercent', event.target.value)} /></label>
       </div>
       <label>Manager must approve buys at or above
         <input type="number" min="0" step="0.01" value={form.approvalAmount} onChange={(event) => set('approvalAmount', event.target.value)} />
