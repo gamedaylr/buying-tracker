@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import logo from '../gameday-logo.png';
+import logo from '../shopLogo';
 import { useAuth } from '../auth/AuthProvider';
 import { parseAamva } from '../lib/aamva';
 import {
@@ -420,7 +420,12 @@ export default function BuyScreen({ onManage }) {
 
   function printReceipt(purchase) {
     const signatureUrlValue = signatureUrl();
-    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl: signatureUrlValue, shopName: settings.shopName }));
+    printHtml(receiptHtml(purchase, {
+      logoUrl: absoluteAsset(logo),
+      signatureUrl: signatureUrlValue,
+      shopName: settings.shopName,
+      accentColor: settings.accentColor,
+    }));
   }
 
   async function approve() {

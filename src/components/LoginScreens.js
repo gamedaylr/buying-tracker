@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import logo from '../gameday-logo.png';
+import logo from '../shopLogo';
+import { deploymentDefaults } from '../shopEnv';
 import { auth } from '../firebase';
 import { initialShopId, normalizeSettings } from '../lib/buying';
 import { plainError } from '../lib/errors';
@@ -27,14 +28,14 @@ export function LoadingScreen({ settings }) {
   );
 }
 
-export function BlockedScreen({ settings, message }) {
+export function BlockedScreen({ settings, message, hint }) {
   return (
     <main className="gate">
       <Brand settings={settings} large />
       <section className="card">
         <h1>Sign-in is not ready</h1>
         <p>{message}</p>
-        <p className="hint">The current live site is unchanged until this version is published and the new database rules are turned on. The setup steps are in the project README.</p>
+        <p className="hint">{hint || 'The current live site is unchanged until this version is published and the new database rules are turned on. The setup steps are in the project README.'}</p>
       </section>
     </main>
   );
@@ -141,8 +142,14 @@ export function SetupScreen({ settings, showSignIn }) {
         <p className="hint">Do this once, as soon as the new site is published. This person can add everyone else. There is no shared PIN.</p>
         <form onSubmit={submit} className="stack">
           <label>Shop name
-            <input value={shopName} onChange={(event) => setShopName(event.target.value)} required />
+            <input
+              value={shopName}
+              onChange={(event) => setShopName(event.target.value)}
+              readOnly={deploymentDefaults.shopNameWasSet}
+              required
+            />
           </label>
+          {deploymentDefaults.shopNameWasSet ? <p className="hint">This name is set for this site. Leave it as shown.</p> : null}
           <label>Your name
             <input value={name} onChange={(event) => setName(event.target.value)} required />
           </label>

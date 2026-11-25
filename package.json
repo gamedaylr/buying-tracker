@@ -15,9 +15,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "GENERATE_SOURCEMAP=false react-scripts build",
-    "test": "react-scripts test",
+    "start": "node scripts/with-shop-env.mjs npm run start:app",
+    "start:app": "node scripts/write-shop-env.mjs && react-scripts start",
+    "build": "node scripts/with-shop-env.mjs npm run build:app",
+    "build:app": "node scripts/write-shop-env.mjs && GENERATE_SOURCEMAP=false react-scripts build && node scripts/brand-build.mjs",
+    "test": "node scripts/write-shop-env.mjs && react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

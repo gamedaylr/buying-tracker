@@ -10,6 +10,8 @@ import {
 } from './components/LoginScreens';
 import ManagerDesk from './components/ManagerDesk';
 import { isManagerRole } from './lib/buying';
+import { firebaseConfigError } from './firebase';
+import { pageTitle } from './shopEnv';
 
 function useRoute() {
   const [hash, setHash] = useState(window.location.hash || '#/buy');
@@ -27,11 +29,19 @@ function Shell() {
   const [forceLogin, setForceLogin] = useState(false);
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', settings.accentColor || '#ed1c24');
-    document.title = `${settings.shopShortName} buying desk`;
+    document.title = pageTitle(settings);
   }, [settings]);
 
   if (status === 'loading') return <LoadingScreen settings={settings} />;
-  if (status === 'blocked') return <BlockedScreen settings={settings} message={configError} />;
+  if (status === 'blocked') {
+    return (
+      <BlockedScreen
+        settings={settings}
+        message={configError}
+        hint={firebaseConfigError ? 'Add this site\'s own Firebase variables, then redeploy. Do not create a login on this page.' : undefined}
+      />
+    );
+  }
   if (status === 'missing') return <MissingProfile settings={settings} onSignOut={signOutShop} />;
   if (status === 'setup' && !forceLogin) {
     return (

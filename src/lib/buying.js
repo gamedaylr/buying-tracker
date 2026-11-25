@@ -1,4 +1,5 @@
 /** Domain logic for the buying desk. No Firebase or DOM. */
+import { deploymentDefaults } from '../shopEnv';
 
 export const PAYMENT_METHODS = [
   { key: 'cash', label: 'Cash', cash: true },
@@ -20,9 +21,18 @@ export const INVENTORY_STATUSES = [
 
 export const FORM_8300_CASH_LIMIT = 10000;
 
-export const DEFAULT_LOCATION = 'In Shop';
+export function shopIdFromName(name) {
+  const slug = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return slug || 'shop';
+}
 
-/** Blank locations on older buys are In Shop. */
+export const DEFAULT_LOCATION = deploymentDefaults.locationLabel;
+
+/** Blank locations on older buys use the site's default, which is In Shop here. */
 export function locationName(value) {
   const text = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
   return text || DEFAULT_LOCATION;
@@ -45,14 +55,17 @@ export function knownLocations(purchases) {
 /**
  * Defaults for this deployment. A manager can change every one of these
  * in settings. `shopId` is stamped on new records so a later version can
- * tell shops apart. This build does not switch shops or bill anyone.
+ * tell shops apart. This site still runs one shop and does not bill anyone.
+ * With no shop env vars, these stay the Little Rock values.
  */
 export const DEFAULT_SETTINGS = {
-  shopId: 'gameday',
-  shopName: 'GameDay Sports Cards',
-  shopShortName: 'GameDay',
-  tagline: 'Buying desk',
-  accentColor: '#ed1c24',
+  shopId: deploymentDefaults.shopId
+    || (deploymentDefaults.shopNameWasSet ? shopIdFromName(deploymentDefaults.shopName) : deploymentDefaults.fallbackShopId),
+  shopName: deploymentDefaults.shopName,
+  shopShortName: deploymentDefaults.shopShortName
+    || (deploymentDefaults.shopNameWasSet ? deploymentDefaults.shopName : deploymentDefaults.fallbackShortName),
+  tagline: deploymentDefaults.tagline,
+  accentColor: deploymentDefaults.accentColor,
   idRequired: true,
   idThreshold: 250,
   cashPercent: 70,
@@ -60,15 +73,6 @@ export const DEFAULT_SETTINGS = {
   approvalAmount: 1000,
   holdDays: 0,
 };
-
-export function shopIdFromName(name) {
-  const slug = String(name || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-  return slug || 'shop';
-}
 
 export function initialShopId(shopName) {
   if (!shopName || shopName.trim().toLowerCase() === DEFAULT_SETTINGS.shopName.toLowerCase()) {

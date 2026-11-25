@@ -1,0 +1,20 @@
+{
+  "firebase": {
+    "apiKey": "AIzaSyAjHoxB4h09Ame44C5MowR_IrbqNdANH8E",
+    "authDomain": "gameday-buying-tracker.firebaseapp.com",
+    "projectId": "gameday-buying-tracker",
+    "storageBucket": "gameday-buying-tracker.firebasestorage.app",
+    "messagingSenderId": "363561073964",
+    "appId": "1:363561073964:web:f96c0e8b485f76796e0089",
+    "databaseURL": "https://gameday-buying-tracker-default-rtdb.firebaseio.com"
+  },
+  "shop": {
+    "shopId": "gameday",
+    "shopName": "GameDay Sports Cards",
+    "shopShortName": "GameDay",
+    "tagline": "Buying desk",
+    "accentColor": "#ed1c24",
+    "locationLabel": "In Shop",
+    "pageTitle": "GameDay buying desk"
+  }
+}

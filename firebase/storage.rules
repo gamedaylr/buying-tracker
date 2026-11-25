@@ -1,3 +1,6 @@
+// These rules are not tied to one Firebase project. Publish them on each
+// shop's own project. Do not paste them over the live Little Rock project
+// gameday-buying-tracker unless you mean to change that shop.
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {

@@ -169,6 +169,9 @@ test('a location is saved, older buys count as In Shop, and search can find the 
   expect(slip).toContain('Cabot Card Show');
   expect(receiptText(purchase)).not.toContain('Cabot');
   expect(receiptHtml(purchase, { shopName: 'GameDay Sports Cards' })).not.toContain('Cabot');
+  expect(receiptHtml(purchase, { shopName: 'GameDay Sports Cards' })).toContain('border-bottom: 4px solid #ed1c24');
+  expect(receiptHtml(purchase, { shopName: 'GameDay Sports Cards', accentColor: '#112233' })).toContain('#112233');
+  expect(receiptHtml(purchase, { shopName: 'GameDay Sports Cards', accentColor: 'red' })).toContain('#ed1c24');
 });
 
 test('the seller handoff counts cards and leaves out the comp', () => {

@@ -1,7 +1,11 @@
-import { DEFAULT_LOCATION, locationName } from './buying';
+import { DEFAULT_LOCATION, DEFAULT_SETTINGS, locationName } from './buying';
 
-const CURRENT_KEY = 'gameday-buy-location';
-const RECENT_KEY = 'gameday-recent-locations';
+// Little Rock keeps the original keys so a phone remembers its last location.
+const storagePrefix = DEFAULT_SETTINGS.shopId && DEFAULT_SETTINGS.shopId !== 'gameday'
+  ? DEFAULT_SETTINGS.shopId
+  : 'gameday';
+const CURRENT_KEY = `${storagePrefix}-buy-location`;
+const RECENT_KEY = `${storagePrefix}-recent-locations`;
 
 function storage() {
   try {
@@ -25,7 +29,7 @@ export function readRecentLocations() {
       const parsed = JSON.parse(store.getItem(RECENT_KEY) || '[]');
       if (Array.isArray(parsed)) parsed.forEach((item) => names.push(locationName(item)));
     } catch (ignore) {
-      // A bad saved list just falls back to In Shop.
+      // A bad saved list just falls back to the default location.
     }
   }
   if (!names.some((name) => name.toLowerCase() === DEFAULT_LOCATION.toLowerCase())) names.unshift(DEFAULT_LOCATION);

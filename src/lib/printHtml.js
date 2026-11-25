@@ -240,7 +240,12 @@ export function slipHtml(purchase, { shopName, signatureUrl } = {}) {
     </div></body></html>`;
 }
 
-export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) {
+function receiptAccent(value) {
+  return /^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#ed1c24';
+}
+
+export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName, accentColor } = {}) {
+  const accent = receiptAccent(accentColor);
   const items = lineItemsOf(purchase).map((item) => {
     const cert = item.certNumber ? `${item.grader || ''} #${escapeHtml(item.certNumber)}` : '';
     const official = item.verification
@@ -257,7 +262,7 @@ export function receiptHtml(purchase, { logoUrl, signatureUrl, shopName } = {}) 
   return `<!DOCTYPE html><html><head><title>Receipt #${escapeHtml(purchase.purchaseNumber)}</title>
     <style>
       body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 24px; }
-      header { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #ed1c24; padding-bottom: 8px; }
+      header { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid ${accent}; padding-bottom: 8px; }
       img { height: 52px; }
       h1 { font-family: Arial, sans-serif; font-size: 20px; margin: 0; letter-spacing: 0.04em; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; font-family: Arial, sans-serif; font-size: 13px; }

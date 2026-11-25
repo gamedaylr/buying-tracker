@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { get, onValue, ref } from 'firebase/database';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db, firestore } from '../firebase';
+import { auth, db, firestore, firebaseConfigError } from '../firebase';
 import { isManagerRole, normalizeSettings } from '../lib/buying';
 import { plainError } from '../lib/errors';
 import { ensurePurchaseCounter, rowsFromSnapshot } from '../services/purchases';
@@ -24,18 +24,27 @@ export default function AuthProvider({ children }) {
   const [settings, setSettings] = useState(() => normalizeSettings(null));
   const [sellers, setSellers] = useState([]);
 
-  useEffect(() => onAuthStateChanged(auth, (user) => {
-    setFirebaseUser(user);
-    setAuthReady(true);
-  }), []);
+  useEffect(() => {
+    if (!auth) {
+      setAuthReady(true);
+      return undefined;
+    }
+    return onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setAuthReady(true);
+    });
+  }, []);
 
-  useEffect(() => onValue(ref(db, 'meta/initialized'), (snapshot) => {
-    setInitialized(snapshot.val() === true);
-    setConfigError('');
-  }, (error) => {
-    setInitialized(null);
-    setConfigError(plainError(error));
-  }), []);
+  useEffect(() => {
+    if (!db) return undefined;
+    return onValue(ref(db, 'meta/initialized'), (snapshot) => {
+      setInitialized(snapshot.val() === true);
+      setConfigError('');
+    }, (error) => {
+      setInitialized(null);
+      setConfigError(plainError(error));
+    });
+  }, []);
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -96,21 +105,23 @@ export default function AuthProvider({ children }) {
     };
   }, [active, profile, settings.shopId]);
 
-  const status = !authReady || initialized === undefined || (firebaseUser && profile === undefined)
-    ? 'loading'
-    : configError && initialized == null
-      ? 'blocked'
-      : active
-        ? 'ready'
-        : firebaseUser && profile === null
-          ? 'missing'
-          : initialized === false
-            ? 'setup'
-            : 'signedout';
+  const status = firebaseConfigError
+    ? 'blocked'
+    : !authReady || initialized === undefined || (firebaseUser && profile === undefined)
+      ? 'loading'
+      : configError && initialized == null
+        ? 'blocked'
+        : active
+          ? 'ready'
+          : firebaseUser && profile === null
+            ? 'missing'
+            : initialized === false
+              ? 'setup'
+              : 'signedout';
 
   const value = useMemo(() => ({
     status,
-    configError,
+    configError: firebaseConfigError || configError,
     firebaseUser,
     profile,
     settings,

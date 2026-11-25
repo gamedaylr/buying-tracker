@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { get, onValue, ref, update } from 'firebase/database';
-import logo from '../gameday-logo.png';
+import logo from '../shopLogo';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthProvider';
 import {
@@ -14,6 +14,7 @@ import {
   formatPercent,
   normalizeSettings,
   formatDisplayDate,
+  DEFAULT_LOCATION,
   knownLocations,
   lineItemsOf,
   locationName,
@@ -195,7 +196,12 @@ export default function ManagerDesk() {
     let signatureUrl = '';
     const path = purchase.photos && purchase.photos.signature && purchase.photos.signature.storagePath;
     if (path) signatureUrl = await downloadUrl(path).catch(() => '');
-    printHtml(receiptHtml(purchase, { logoUrl: absoluteAsset(logo), signatureUrl, shopName: settings.shopName }));
+    printHtml(receiptHtml(purchase, {
+      logoUrl: absoluteAsset(logo),
+      signatureUrl,
+      shopName: settings.shopName,
+      accentColor: settings.accentColor,
+    }));
   }
 
   return (
@@ -459,7 +465,7 @@ function SummaryPanel({ purchases, locations }) {
     <section className="stack" data-testid="summary-panel">
       <article className="card stack">
         <h2>Date range</h2>
-        <p className="hint">Pick a location and a day or range, then tap Cash out or any total. Buys with no location count as In Shop.</p>
+        <p className="hint">Pick a location and a day or range, then tap Cash out or any total. Buys with no location count as {DEFAULT_LOCATION}.</p>
         <label>Location
           <select value={location} onChange={(event) => { setLocation(event.target.value); setDrill(null); }}>
             <option value="any">All locations</option>

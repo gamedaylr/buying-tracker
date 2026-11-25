@@ -50,7 +50,7 @@ Do these steps when you are ready to switch the live site. Until you publish the
 12. Open **Manager desk → People** and add each employee. Choose **Staff** for people who only log buys. Choose **Manager** for people who should see money, history, and ID photos. Tell them the email and password. They can use **Forgot password** on the sign-in screen later.
 13. Open **Manager desk → Settings** and set the cash percent, store-credit percent, the dollar amount that requires an ID, and the amount that needs your approval. The starting values are cash 70%, store credit 80%, ID at $250, and approval at $1,000. New buys are saved as bought, with no hold.
 
-To put the shop's own name on another copy of this app later, change the shop name in Settings and replace `public/gameday-logo.png`. New buys are stamped with a shop id. This version does not run two shops or take payments for the software.
+To stand up another shop, use a new Firebase project and a new Netlify site. The steps for the Las Vegas shop are in [docs/LAS-VEGAS-SETUP.md](docs/LAS-VEGAS-SETUP.md). Do not replace `public/gameday-logo.png` and do not change the Little Rock site's environment variables to rename a second shop. Each site still runs one shop. New buys are stamped with that site's shop id. This app does not take payments for the software.
 
 ## If something goes wrong
 
